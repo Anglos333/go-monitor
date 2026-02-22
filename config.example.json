@@ -1,0 +1,25 @@
+{
+  "interval": 5,
+  "alert_threshold": 3,
+  "alert_cooldown": 60,
+  "smtp": {
+    "enabled": true,
+    "host": "smtp.qq.com",
+    "port": 465,
+    "username": "your_email@qq.com",
+    "password": "在此填写你的授权码",
+    "to": "receive_email@qq.com"
+  },
+  "tasks": [
+    {
+      "id": 1,
+      "name": "本地监控后台",
+      "url": "http://127.0.0.1:9090"
+    },
+    {
+      "id": 2,
+      "name": "百度搜索",
+      "url": "https://www.baidu.com"
+    }
+  ]
+}
