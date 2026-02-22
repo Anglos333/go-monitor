@@ -1,0 +1,50 @@
+{
+  "interval": 5,
+  "alert_threshold": 3,
+  "alert_cooldown": 60,
+  "smtp": {
+    "enabled": true,
+    "host": "smtp.qq.com",
+    "port": 465,
+    "username": "your_email@qq.com",
+    "password": "3G7NMfuPVrM89WfkgpmyteoqcdhmKe0SbkT+JGBWamI=",
+    "to": "receive_email@qq.com"
+  },
+  "tasks": [
+    {
+      "id": 1,
+      "name": "百度搜索",
+      "url": "https://www.baidu.com"
+    },
+    {
+      "id": 2,
+      "name": "111",
+      "url": "http://111"
+    },
+    {
+      "id": 3,
+      "name": "bilbil",
+      "url": "http://www.bilbil.com"
+    },
+    {
+      "id": 4,
+      "name": "Googel",
+      "url": "http://www.bilbil.com"
+    },
+    {
+      "id": 5,
+      "name": "斗鱼",
+      "url": "https://www.douyu.com"
+    },
+    {
+      "id": 6,
+      "name": "2",
+      "url": "https://2"
+    },
+    {
+      "id": 7,
+      "name": "Googel",
+      "url": "https://www.douyu.com"
+    }
+  ]
+}

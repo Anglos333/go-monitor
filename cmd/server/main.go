@@ -64,7 +64,7 @@ func main() {
 	mux := http.NewServeMux()
 	h.Register(mux)
 
-	addr := ":9091"
+	addr := ":9090"
 	fmt.Println("🌐 管理后台:", "http://127.0.0.1"+addr)
 	log.Fatal(http.ListenAndServe(addr, mux))
 }
