@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>哈基米监控系统 · 控制台</title>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+  <script>
+    // 将主题初始化前置，防止页面加载时闪烁 (FOUC)
+    const THEME_KEY = "theme-mode";
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    
+    function applyTheme(mode) {
+      let finalMode = mode === "auto" ? (media.matches ? "dark" : "light") : mode;
+      document.documentElement.setAttribute("data-theme", finalMode);
+    }
+    applyTheme(localStorage.getItem(THEME_KEY) || "auto");
+  </script>
+  <style>
+    /* 核心 CSS 变量系统 */
+    :root, html[data-theme="light"] {
+      --bg: #f4f6f8;
+      --panel: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --primary: #4f46e5;
+      --green: #10b981;
+      --yellow: #f59e0b;
+      --red: #ef4444;
+      
+      --top-bg: rgba(255, 255, 255, 0.85);
+      --grad-1: rgba(79, 70, 229, 0.05);
+      --grad-2: rgba(16, 185, 129, 0.05);
+      --modal-bg: #ffffff;
+      --input-bg: #f9fafb;
+      --th-bg: #f3f4f6;
+      --hover-bg: rgba(0, 0, 0, 0.03);
+      --shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    }
+
+    html[data-theme="dark"] {
+      --bg: #0b1020;
+      --panel: #121a31;
+      --text: #e8ecff;
+      --muted: #9aa6d1;
+      --line: #253056;
+      --primary: #5c7eff;
+      --green: #34d399;
+      --yellow: #fbbf24;
+      --red: #f87171;
+      
+      --top-bg: rgba(11, 16, 32, 0.85);
+      --grad-1: #22326b;
+      --grad-2: #3f2a74;
+      --modal-bg: linear-gradient(180deg, #151e36, #0e1428);
+      --input-bg: rgba(255, 255, 255, 0.03);
+      --th-bg: rgba(255, 255, 255, 0.03);
+      --hover-bg: rgba(255, 255, 255, 0.03);
+      --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
+      background:
+        radial-gradient(1200px 500px at 10% -20%, var(--grad-1) 0%, transparent 60%),
+        radial-gradient(1000px 450px at 90% -10%, var(--grad-2) 0%, transparent 55%),
+        var(--bg);
+      background-attachment: fixed;
+      color: var(--text);
+      min-height: 100vh;
+      transition: background 0.3s, color 0.3s;
+    }
+
+    .top {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      background: var(--top-bg);
+      border-bottom: 1px solid var(--line);
+      padding: 14px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      transition: background 0.3s;
+    }
+
+    .title { font-size: 18px; font-weight: 700; letter-spacing: .5px; }
+    .stats { display: flex; gap: 14px; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
+    
+    .chip {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 999px;
+      padding: 6px 12px;
+      display: flex;
+      align-items: center;
+    }
+
+    .container {
+      max-width: 1260px;
+      margin: 20px auto;
+      padding: 0 16px 24px;
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 980px) { .container { grid-template-columns: 1fr; } }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      padding: 18px;
+      transition: background 0.3s, border-color 0.3s;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+
+    .card-title { font-size: 16px; font-weight: 700; }
+    .muted { color: var(--muted); }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    .btn {
+      border: none;
+      outline: none;
+      cursor: pointer;
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #fff;
+      transition: all .2s ease;
+      background: #475569;
+    }
+
+    .btn:hover { transform: translateY(-1px); filter: brightness(1.1); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    .btn:active { transform: translateY(0); }
+
+    .btn-primary { background: var(--primary); }
+    .btn-success { background: var(--green); }
+    .btn-warn { background: var(--yellow); color: #1f2937; }
+    .btn-danger { background: var(--red); }
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--line);
+      color: var(--text);
+    }
+    .btn-ghost:hover { background: var(--hover-bg); }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+    }
+
+    table { width: 100%; border-collapse: collapse; min-width: 760px; font-size: 13px; }
+    th, td { padding: 12px 16px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+    th { text-align: left; color: var(--text); background: var(--th-bg); position: sticky; top: 0; font-weight: 600; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--hover-bg); }
+
+    .url { color: var(--muted); font-size: 12px; word-break: break-all; margin-top: 4px; }
+    .badge { padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; color: #fff; }
+    
+    .bg-green { background: var(--green); }
+    .bg-yellow { background: var(--yellow); color: #1f2937; }
+    .bg-red { background: var(--red); }
+
+    .dots { display: flex; gap: 6px; align-items: center; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 4px rgba(0,0,0,0.1); }
+    .dot-green { background: var(--green); }
+    .dot-yellow { background: var(--yellow); }
+    .dot-red { background: var(--red); }
+
+    .log-list {
+      max-height: 620px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 8px;
+      background: var(--input-bg);
+    }
+    .log-item { border-bottom: 1px dashed var(--line); padding: 10px 6px; font-size: 13px; }
+    .log-item:last-child { border-bottom: none; }
+    .log-time { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+    .tag-warn { color: var(--red); font-weight: 700; margin-right: 4px; }
+    .tag-ok { color: var(--green); font-weight: 700; margin-right: 4px; }
+
+    /* modal */
+    .overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0, 0, 0, .5);
+      backdrop-filter: blur(4px);
+      z-index: 99;
+      animation: fadeIn 0.2s ease;
+    }
+    
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes popIn { from { transform: translate(-50%, -48%) scale(0.96); opacity: 0; } to { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
+
+    .modal {
+      display: none; z-index: 100; position: fixed; left: 50%; top: 50%;
+      transform: translate(-50%, -50%);
+      width: min(560px, 92vw); max-height: 88vh; overflow: auto;
+      border-radius: 16px; border: 1px solid var(--line);
+      background: var(--modal-bg);
+      box-shadow: var(--shadow);
+      padding: 20px;
+      animation: popIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    #chart-modal { width: min(980px, 95vw); }
+    #main-chart { height: 420px; width: 100%; }
+
+    .modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .modal-head h3 { margin: 0; font-size: 18px; color: var(--text); }
+    
+    .close {
+      cursor: pointer; font-size: 24px; color: var(--muted);
+      width: 32px; height: 32px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s;
+    }
+    .close:hover { background: var(--hover-bg); color: var(--text); }
+
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 680px) { .grid { grid-template-columns: 1fr; } }
+
+    .field label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; font-weight: 500; }
+    .field input {
+      width: 100%; padding: 10px 12px; border-radius: 8px;
+      border: 1px solid var(--line); background: var(--input-bg);
+      color: var(--text); outline: none; transition: border 0.2s, box-shadow 0.2s;
+      font-family: inherit;
+    }
+    .field input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15); }
+
+    .hr { height: 1px; background: var(--line); margin: 16px 0; }
+    .right { display: flex; justify-content: flex-end; }
+    .tiny { font-size: 12px; color: var(--muted); margin-top: 4px;}
+    .strike { text-decoration: line-through; color: var(--muted); opacity: 0.7; }
+    
+    select {
+      background: var(--input-bg);
+      color: var(--text);
+      border: 1px solid var(--line);
+      padding: 4px 8px;
+      border-radius: 6px;
+      outline: none;
+      font-family: inherit;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="top">
+    <div class="title">🚀 哈基米监控系统 · 分层版控制台</div>
+    <div class="stats">
+      <div class="chip">⏱️ 运行时长：<span id="sys-uptime" style="margin-left:4px;font-weight:600;">--</span></div>
+      <div class="chip">🧵 协程：<span id="sys-go" style="margin-left:4px;font-weight:600;">--</span></div>
+      <div class="chip">💾 内存：<span id="sys-mem" style="margin-left:4px;font-weight:600;">--</span></div>
+    </div>
+    <div class="chip">
+      🎨 主题：
+      <select id="theme-select" onchange="setThemeMode(this.value)" style="margin-left:6px;">
+        <option value="auto">跟随系统</option>
+        <option value="light">浅色</option>
+        <option value="dark">深色</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="container">
+    <section class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">📡 监控任务</div>
+          <div class="tiny">添加后会立即触发一次检测；若服务不可达将记录告警。</div>
+        </div>
+        <div class="actions">
+          <button class="btn btn-primary" onclick="openModal('add-modal')">➕ 添加</button>
+          <button class="btn btn-warn" onclick="openModal('settings-modal')">⚙️ 设置</button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:60px;">ID</th>
+              <th>服务</th>
+              <th style="width:90px;">状态</th>
+              <th style="width:130px;">趋势</th>
+              <th style="width:100px;">耗时</th>
+              <th style="width:140px;">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .Results}}
+            <tr>
+              <td>{{.ID}}</td>
+              <td>
+                <div style="font-weight:600;">{{.TaskName}}</div>
+                <div class="url">{{.URL}}</div>
+              </td>
+              <td><span class="badge bg-{{.StatusColor}}">{{.Status}}</span></td>
+              <td>
+                <div class="dots">
+                  {{range .HistoryDots}}<span class="dot dot-{{.}}"></span>{{end}}
+                </div>
+              </td>
+              <td style="font-family: monospace;">{{.Duration}}</td>
+              <td>
+                <div class="actions">
+                  <button class="btn btn-ghost" onclick="showChart({{.ID}}, '{{.TaskName}}')" title="查看趋势">📊</button>
+                  <button class="btn btn-ghost" onclick="deleteTask({{.ID}})" title="删除任务" style="color: var(--red); border-color: transparent;">🗑️</button>
+                </div>
+              </td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <aside class="card">
+      <div class="card-header">
+        <div class="card-title">🛡️ 审计日志</div>
+        <div class="actions">
+          <a class="btn btn-success" href="/api/logs/export" target="_blank" style="text-decoration:none;">📥 CSV</a>
+          <button class="btn btn-danger" onclick="clearLogs()">清空</button>
+        </div>
+      </div>
+
+      <div class="log-list">
+        {{range .Logs}}
+        <div class="log-item">
+          <div class="log-time">{{.EventTime}}</div>
+          <div>
+            {{if eq .Type "🔥 宕机警告"}}<span class="tag-warn">[警]</span>{{else}}<span class="tag-ok">[复]</span>{{end}}
+            {{if .IsResolved}}<span class="strike">{{.Message}}</span>{{else}}{{.Message}}{{end}}
+          </div>
+        </div>
+        {{end}}
+      </div>
+    </aside>
+  </div>
+
+  <div id="overlay" class="overlay" onclick="closeAllModals()"></div>
+
+  <div id="add-modal" class="modal">
+    <div class="modal-head">
+      <h3>➕ 添加监控任务</h3>
+      <span class="close" onclick="closeAllModals()">×</span>
+    </div>
+    <div class="field">
+      <label>任务名称</label>
+      <input id="add-name" type="text" placeholder="例如：我的博客首页" />
+    </div>
+    <div class="field" style="margin-top:14px;">
+      <label>URL（支持不带协议，会自动补 http://）</label>
+      <input id="add-url" type="text" placeholder="example.com 或 https://example.com" />
+    </div>
+    <div style="margin-top:20px;" class="right">
+      <button class="btn btn-primary" onclick="submitAddTask()">确认添加</button>
+    </div>
+  </div>
+
+  <div id="settings-modal" class="modal">
+    <div class="modal-head">
+      <h3>⚙️ 系统设置</h3>
+      <span class="close" onclick="closeAllModals()">×</span>
+    </div>
+
+    <div class="grid">
+      <div class="field">
+        <label>监控间隔（秒）</label>
+        <input id="set-interval" type="number" min="1" value="{{.Config.Interval}}" />
+      </div>
+      <div class="field">
+        <label>防抖阈值（连续失败次）</label>
+        <input id="set-threshold" type="number" min="1" value="{{.Config.AlertThreshold}}" />
+      </div>
+      <div class="field">
+        <label>静默冷却（分钟）</label>
+        <input id="set-cooldown" type="number" min="0" value="{{.Config.AlertCooldown}}" />
+      </div>
+      <div class="field" style="display:flex;align-items:center;">
+        <label style="display:flex;gap:8px;align-items:center;margin:0;cursor:pointer;">
+          <input id="set-enabled" type="checkbox" style="width:18px;height:18px;cursor:pointer;" {{if .Config.SMTP.Enabled}}checked{{end}} />
+          <span style="font-size:14px;color:var(--text);">启用邮件告警</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="hr"></div>
+
+    <div class="grid">
+      <div class="field">
+        <label>SMTP 主机</label>
+        <input id="set-host" type="text" value="{{.Config.SMTP.Host}}" />
+      </div>
+      <div class="field">
+        <label>SMTP 端口</label>
+        <input id="set-port" type="number" value="{{.Config.SMTP.Port}}" />
+      </div>
+      <div class="field">
+        <label>发件邮箱</label>
+        <input id="set-user" type="text" value="{{.Config.SMTP.Username}}" />
+      </div>
+      <div class="field">
+        <label>授权码（留空不修改）</label>
+        <input id="set-pass" type="password" value="" placeholder="留空则保持旧密码" />
+      </div>
+      <div class="field" style="grid-column:1/-1;">
+        <label>收件邮箱</label>
+        <input id="set-to" type="text" value="{{.Config.SMTP.To}}" />
+      </div>
+    </div>
+
+    <div style="margin-top:20px;" class="right">
+      <button class="btn btn-primary" onclick="submitSettings()">保存设置</button>
+    </div>
+  </div>
+
+  <div id="chart-modal" class="modal">
+    <div class="modal-head">
+      <h3 id="chart-title">📈 响应趋势图</h3>
+      <span class="close" onclick="closeAllModals()">×</span>
+    </div>
+    <div id="main-chart"></div>
+  </div>
+
+  <script>
+    const overlay = document.getElementById('overlay');
+    let myChart = null;
+
+    function openModal(id) {
+      overlay.style.display = 'block';
+      document.getElementById(id).style.display = 'block';
+    }
+    
+    function closeAllModals() {
+      overlay.style.display = 'none';
+      document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
+    }
+
+    async function submitAddTask() {
+      const n = document.getElementById('add-name').value.trim();
+      const u = document.getElementById('add-url').value.trim();
+      if (!n || !u) return alert("主人，请填写完整的任务名称和URL哦！");
+
+      async function doSubmit(force) {
+        return fetch('/api/task/add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: n, url: u, force })
+        });
+      }
+
+      try {
+        let r = await doSubmit(false);
+        if (r.ok) {
+          alert("添加成功！");
+          return window.location.reload();
+        }
+        const msg = await r.text();
+
+        if (r.status === 422) {
+          if (confirm(msg + "\n是否强制添加？")) {
+            r = await doSubmit(true);
+            if (!r.ok) {
+              const msg2 = await r.text();
+              return alert("强制添加失败: " + msg2);
+            }
+            alert("已强制添加！");
+            return window.location.reload();
+          }
+          return;
+        }
+        return alert("添加失败: " + msg);
+      } catch (e) {
+        alert("请求失败: " + e);
+      }
+    }
+
+    async function deleteTask(id) {
+      if (!confirm("确认要删除该任务吗？")) return;
+      try {
+        const r = await fetch('/api/task/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id })
+        });
+        if (!r.ok) {
+          const msg = await r.text();
+          return alert("删除失败: " + msg);
+        }
+        window.location.reload();
+      } catch (e) {
+        alert("请求失败: " + e);
+      }
+    }
+
+    async function submitSettings() {
+      const cfg = {
+        interval: parseInt(document.getElementById('set-interval').value, 10),
+        alert_threshold: parseInt(document.getElementById('set-threshold').value, 10),
+        alert_cooldown: parseInt(document.getElementById('set-cooldown').value, 10),
+        smtp: {
+          enabled: document.getElementById('set-enabled').checked,
+          host: document.getElementById('set-host').value.trim(),
+          port: parseInt(document.getElementById('set-port').value, 10),
+          username: document.getElementById('set-user').value.trim(),
+          password: document.getElementById('set-pass').value,
+          to: document.getElementById('set-to').value.trim()
+        }
+      };
+      try {
+        const r = await fetch('/api/settings/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(cfg)
+        });
+        if (!r.ok) {
+          const msg = await r.text();
+          return alert("保存失败: " + msg);
+        }
+        alert("保存成功！");
+        window.location.reload();
+      } catch (e) {
+        alert("请求失败: " + e);
+      }
+    }
+
+    async function clearLogs() {
+      if (!confirm("确定清空所有日志吗？清空后无法恢复哦！")) return;
+      try {
+        const r = await fetch('/api/logs/clear', { method: 'POST' });
+        if (!r.ok) {
+          const msg = await r.text();
+          return alert("清空失败: " + msg);
+        }
+        alert("日志已清空！");
+        window.location.reload();
+      } catch (e) {
+        alert("请求失败: " + e);
+      }
+    }
+
+    function showChart(id, name) {
+      openModal('chart-modal');
+      document.getElementById('chart-title').innerText = `📈 ${name} 响应趋势`;
+
+      if (!myChart) {
+        myChart = echarts.init(document.getElementById('main-chart'));
+      }
+      myChart.showLoading();
+
+      // 动态获取当前主题下的文字颜色，解决 ECharts 字体颜色写死的问题
+      const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text').trim();
+      const lineColor = getComputedStyle(document.documentElement).getPropertyValue('--line').trim();
+
+      fetch('/api/chart?id=' + id)
+        .then(r => r.json())
+        .then(data => {
+          myChart.hideLoading();
+          myChart.setOption({
+            backgroundColor: 'transparent',
+            grid: { left: '8%', right: '5%', top: '10%', bottom: '12%' },
+            tooltip: { trigger: 'axis', backgroundColor: 'rgba(255, 255, 255, 0.9)', textStyle: { color: '#333' } },
+            xAxis: {
+              type: 'category',
+              data: data.times,
+              axisLabel: { color: textColor }
+            },
+            yAxis: {
+              type: 'value',
+              axisLabel: { color: textColor },
+              splitLine: { lineStyle: { color: lineColor } }
+            },
+            series: [{
+              name: '响应时间(ms)',
+              type: 'line',
+              data: data.values,
+              smooth: true,
+              showSymbol: false,
+              lineStyle: { width: 3, color: '#5b8cff' },
+              areaStyle: { 
+                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                  { offset: 0, color: 'rgba(91, 140, 255, 0.5)' },
+                  { offset: 1, color: 'rgba(91, 140, 255, 0.05)' }
+                ])
+              }
+            }]
+          });
+          myChart.resize();
+        })
+        .catch(() => {
+          myChart.hideLoading();
+          // 如果后端接口没写好，这里可以静默或提示
+          console.warn("趋势图接口请求失败，请检查后端 /api/chart 是否已实现");
+        });
+    }
+
+    async function updateSysStats() {
+      try {
+        const r = await fetch('/api/sys/stats');
+        if (!r.ok) return;
+        const data = await r.json();
+        document.getElementById('sys-uptime').innerText = data.uptime;
+        document.getElementById('sys-go').innerText = data.goroutines;
+        document.getElementById('sys-mem').innerText = data.memory;
+      } catch (_) { }
+    }
+
+    updateSysStats();
+    setInterval(updateSysStats, 1000);
+    window.addEventListener('resize', () => { if (myChart) myChart.resize(); });
+
+    setInterval(() => {
+      if (overlay.style.display !== 'block') window.location.reload();
+    }, 5000);
+
+    function setThemeMode(mode) {
+      localStorage.setItem(THEME_KEY, mode);
+      applyTheme(mode);
+      
+      const sel = document.getElementById("theme-select");
+      if (sel) sel.value = mode;
+
+      // 如果图表正在显示，重新渲染以应用新颜色
+      if (myChart && overlay.style.display === 'block') {
+         // 稍微延迟等待 CSS 变量更新生效
+         setTimeout(() => {
+           const newTextColor = getComputedStyle(document.documentElement).getPropertyValue('--text').trim();
+           const newLineColor = getComputedStyle(document.documentElement).getPropertyValue('--line').trim();
+           myChart.setOption({
+             xAxis: { axisLabel: { color: newTextColor } },
+             yAxis: { 
+               axisLabel: { color: newTextColor },
+               splitLine: { lineStyle: { color: newLineColor } } 
+             }
+           });
+         }, 50);
+      }
+    }
+
+    (function () {
+      const saved = localStorage.getItem(THEME_KEY) || "auto";
+      const sel = document.getElementById("theme-select");
+      if (sel) sel.value = saved;
+    })();
+
+    media.addEventListener("change", () => {
+      const mode = localStorage.getItem(THEME_KEY) || "auto";
+      if (mode === "auto") {
+        applyTheme("auto");
+        // 更新图表（如果打开的话）
+        if (myChart && overlay.style.display === 'block') {
+           setTimeout(() => {
+             const newTextColor = getComputedStyle(document.documentElement).getPropertyValue('--text').trim();
+             const newLineColor = getComputedStyle(document.documentElement).getPropertyValue('--line').trim();
+             myChart.setOption({
+               xAxis: { axisLabel: { color: newTextColor } },
+               yAxis: { axisLabel: { color: newTextColor }, splitLine: { lineStyle: { color: newLineColor } } }
+             });
+           }, 50);
+        }
+      }
+    });
+  </script>
+</body>
+
+</html>

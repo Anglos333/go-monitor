@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>哈基米监控系统 · 控制台</title>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+  <style>
+    :root {
+      --bg: #f3f6ff;
+      --panel: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+    }
+
+    html[data-theme="dark"] {
+      --bg: #0b1020;
+      --panel: #121a31;
+      --text: #e8ecff;
+      --muted: #9aa6d1;
+      --line: #253056;
+    }
+
+    html[data-theme="light"] {
+      --bg: #f3f6ff;
+      --panel: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+    }
+
+    * {
+      box-sizing: border-box
+    }
+
+    body {
+      margin: 0;
+      font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
+      background:
+        radial-gradient(1200px 500px at 10% -20%, #22326b 0%, transparent 60%),
+        radial-gradient(1000px 450px at 90% -10%, #3f2a74 0%, transparent 55%),
+        var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    .top {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      backdrop-filter: blur(8px);
+      background: rgba(11, 16, 32, .7);
+      border-bottom: 1px solid rgba(255, 255, 255, .08);
+      padding: 14px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .title {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: .5px
+    }
+
+    .stats {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      color: var(--muted);
+      font-size: 13px
+    }
+
+    .chip {
+      border: 1px solid rgba(255, 255, 255, .12);
+      background: rgba(255, 255, 255, .04);
+      border-radius: 999px;
+      padding: 6px 10px;
+    }
+
+    .container {
+      max-width: 1260px;
+      margin: 18px auto;
+      padding: 0 14px 24px;
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 14px;
+    }
+
+    @media (max-width: 980px) {
+      .container {
+        grid-template-columns: 1fr
+      }
+    }
+
+    .card {
+      background: linear-gradient(180deg, rgba(255, 255, 255, .04), rgba(255, 255, 255, .01));
+      border: 1px solid rgba(255, 255, 255, .08);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 14px;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 700
+    }
+
+    .muted {
+      color: var(--muted)
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap
+    }
+
+    .btn {
+      border: none;
+      outline: none;
+      cursor: pointer;
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-size: 13px;
+      color: #fff;
+      transition: .18s ease;
+      background: #334155;
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.06)
+    }
+
+    .btn-primary {
+      background: var(--primary)
+    }
+
+    .btn-success {
+      background: var(--green)
+    }
+
+    .btn-warn {
+      background: #f59e0b
+    }
+
+    .btn-danger {
+      background: var(--red)
+    }
+
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, .2);
+      color: var(--text);
+    }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid rgba(255, 255, 255, .08);
+      border-radius: 12px
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 760px;
+      font-size: 13px;
+    }
+
+    th,
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, .07);
+      vertical-align: middle;
+    }
+
+    th {
+      text-align: left;
+      color: #c7d2fe;
+      background: rgba(255, 255, 255, .03);
+      position: sticky;
+      top: 0;
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, .02)
+    }
+
+    .url {
+      color: var(--muted);
+      font-size: 12px;
+      word-break: break-all
+    }
+
+    .badge {
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .bg-green {
+      background: var(--green)
+    }
+
+    .bg-yellow {
+      background: var(--yellow);
+      color: #1f2937
+    }
+
+    .bg-red {
+      background: var(--red)
+    }
+
+    .dots {
+      display: flex;
+      gap: 4px;
+      align-items: center
+    }
+
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%
+    }
+
+    .dot-green {
+      background: var(--green)
+    }
+
+    .dot-yellow {
+      background: var(--yellow)
+    }
+
+    .dot-red {
+      background: var(--red)
+    }
+
+    .log-list {
+      max-height: 620px;
+      overflow: auto;
+      border: 1px solid rgba(255, 255, 255, .08);
+      border-radius: 12px;
+      padding: 8px;
+      background: rgba(0, 0, 0, .15);
+    }
+
+    .log-item {
+      border-bottom: 1px dashed rgba(255, 255, 255, .12);
+      padding: 8px 4px;
+    }
+
+    .log-time {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 4px
+    }
+
+    .tag-warn {
+      color: #fca5a5;
+      font-weight: 700
+    }
+
+    .tag-ok {
+      color: #86efac;
+      font-weight: 700
+    }
+
+    /* modal */
+    .overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, .6);
+      z-index: 99;
+    }
+
+    .modal {
+      display: none;
+      z-index: 100;
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: min(560px, 92vw);
+      max-height: 88vh;
+      overflow: auto;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, .15);
+      background: linear-gradient(180deg, #0f1730, #0e1428);
+      box-shadow: var(--shadow);
+      padding: 14px;
+    }
+
+    #chart-modal {
+      width: min(980px, 95vw)
+    }
+
+    #main-chart {
+      height: 420px
+    }
+
+    .modal-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .close {
+      cursor: pointer;
+      font-size: 22px;
+      color: #cbd5e1;
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .close:hover {
+      background: rgba(255, 255, 255, .08)
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    @media (max-width: 680px) {
+      .grid {
+        grid-template-columns: 1fr
+      }
+    }
+
+    .field label {
+      display: block;
+      font-size: 12px;
+      color: #a5b4fc;
+      margin-bottom: 4px;
+    }
+
+    .field input {
+      width: 100%;
+      padding: 9px 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, .15);
+      background: rgba(255, 255, 255, .03);
+      color: var(--text);
+      outline: none;
+    }
+
+    .field input:focus {
+      border-color: #7c93ff;
+      box-shadow: 0 0 0 3px rgba(92, 126, 255, .18)
+    }
+
+    .hr {
+      height: 1px;
+      background: rgba(255, 255, 255, .1);
+      margin: 10px 0
+    }
+
+    .full {
+      width: 100%
+    }
+
+    .right {
+      display: flex;
+      justify-content: flex-end
+    }
+
+    .tiny {
+      font-size: 12px;
+      color: var(--muted)
+    }
+
+    .strike {
+      text-decoration: line-through;
+      color: #94a3b8
+    }
+  </style>
+</head>
+
+<body>
+  <div class="top">
+    <div class="title">🚀 哈基米监控系统 · 分层版控制台</div>
+    <div class="stats">
+      <div class="chip">⏱️ 运行时长：<span id="sys-uptime">--</span></div>
+      <div class="chip">🧵 协程：<span id="sys-go">--</span></div>
+      <div class="chip">💾 内存：<span id="sys-mem">--</span></div>
+    </div>
+    <div class="chip">
+      🎨 主题：
+      <select id="theme-select" onchange="setThemeMode(this.value)" style="margin-left:6px;">
+        <option value="auto">跟随系统</option>
+        <option value="light">浅色</option>
+        <option value="dark">深色</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="container">
+    <section class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">📡 监控任务</div>
+          <div class="tiny">添加后会立即触发一次检测；若服务不可达将记录告警。</div>
+        </div>
+        <div class="actions">
+          <button class="btn btn-primary" onclick="openModal('add-modal')">➕ 添加</button>
+          <button class="btn btn-warn" onclick="openModal('settings-modal')">⚙️ 设置</button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:60px;">ID</th>
+              <th>服务</th>
+              <th style="width:90px;">状态</th>
+              <th style="width:130px;">趋势</th>
+              <th style="width:100px;">耗时</th>
+              <th style="width:140px;">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .Results}}
+            <tr>
+              <td>{{.ID}}</td>
+              <td>
+                <div><strong>{{.TaskName}}</strong></div>
+                <div class="url">{{.URL}}</div>
+              </td>
+              <td><span class="badge bg-{{.StatusColor}}">{{.Status}}</span></td>
+              <td>
+                <div class="dots">
+                  {{range .HistoryDots}}<span class="dot dot-{{.}}"></span>{{end}}
+                </div>
+              </td>
+              <td>{{.Duration}}</td>
+              <td>
+                <div class="actions">
+                  <button class="btn btn-ghost" onclick='showChart({{.ID}}, "{{.TaskName}}")'>📊</button>
+<!-- 或使用双引号属性，内部用单引号包裹字符串 -->
+<button class="btn btn-ghost" onclick="showChart({{.ID}}, '{{.TaskName}}')">📊</button>
+                </div>
+              </td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <aside class="card">
+      <div class="card-header">
+        <div class="card-title">🛡️ 审计日志</div>
+        <div class="actions">
+          <a class="btn btn-success" href="/api/logs/export" target="_blank" style="text-decoration:none;">📥 CSV</a>
+          <button class="btn btn-danger" onclick="clearLogs()">清空</button>
+        </div>
+      </div>
+
+      <div class="log-list">
+        {{range .Logs}}
+        <div class="log-item">
+          <div class="log-time">{{.EventTime}}</div>
+          <div>
+            {{if eq .Type "🔥 宕机警告"}}<span class="tag-warn">[警]</span>{{else}}<span class="tag-ok">[复]</span>{{end}}
+            {{if .IsResolved}}<span class="strike">{{.Message}}</span>{{else}}{{.Message}}{{end}}
+          </div>
+        </div>
+        {{end}}
+      </div>
+    </aside>
+  </div>
+
+  <!-- Overlay -->
+  <div id="overlay" class="overlay" onclick="closeAllModals()"></div>
+
+  <!-- Add Modal -->
+  <div id="add-modal" class="modal">
+    <div class="modal-head">
+      <h3>➕ 添加监控任务</h3>
+      <span class="close" onclick="closeAllModals()">×</span>
+    </div>
+    <div class="field">
+      <label>任务名称</label>
+      <input id="add-name" type="text" placeholder="例如：我的博客首页" />
+    </div>
+    <div class="field" style="margin-top:10px;">
+      <label>URL（支持不带协议，会自动补 http://）</label>
+      <input id="add-url" type="text" placeholder="example.com 或 https://example.com" />
+    </div>
+    <div style="margin-top:12px;" class="right">
+      <button class="btn btn-primary" onclick="submitAddTask()">确认添加</button>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settings-modal" class="modal">
+    <div class="modal-head">
+      <h3>⚙️ 系统设置</h3>
+      <span class="close" onclick="closeAllModals()">×</span>
+    </div>
+
+    <div class="grid">
+      <div class="field">
+        <label>监控间隔（秒）</label>
+        <input id="set-interval" type="number" min="1" value="{{.Config.Interval}}" />
+      </div>
+      <div class="field">
+        <label>防抖阈值（连续失败次）</label>
+        <input id="set-threshold" type="number" min="1" value="{{.Config.AlertThreshold}}" />
+      </div>
+      <div class="field">
+        <label>静默冷却（分钟）</label>
+        <input id="set-cooldown" type="number" min="0" value="{{.Config.AlertCooldown}}" />
+      </div>
+      <div class="field" style="display:flex;align-items:flex-end;">
+        <label style="display:flex;gap:8px;align-items:center;">
+          <input id="set-enabled" type="checkbox" style="width:auto;" {{if .Config.SMTP.Enabled}}checked{{end}} />
+          启用邮件告警
+        </label>
+      </div>
+    </div>
+
+    <div class="hr"></div>
+
+    <div class="grid">
+      <div class="field">
+        <label>SMTP 主机</label>
+        <input id="set-host" type="text" value="{{.Config.SMTP.Host}}" />
+      </div>
+      <div class="field">
+        <label>SMTP 端口</label>
+        <input id="set-port" type="number" value="{{.Config.SMTP.Port}}" />
+      </div>
+      <div class="field">
+        <label>发件邮箱</label>
+        <input id="set-user" type="text" value="{{.Config.SMTP.Username}}" />
+      </div>
+      <div class="field">
+        <label>授权码（留空不修改）</label>
+        <input id="set-pass" type="password" value="" placeholder="留空则保持旧密码" />
+      </div>
+      <div class="field" style="grid-column:1/-1;">
+        <label>收件邮箱</label>
+        <input id="set-to" type="text" value="{{.Config.SMTP.To}}" />
+      </div>
+    </div>
+
+    <div style="margin-top:12px;" class="right">
+      <button class="btn btn-primary" onclick="submitSettings()">保存设置</button>
+    </div>
+  </div>
+
+  <!-- Chart Modal -->
+  <div id="chart-modal" class="modal">
+    <div class="modal-head">
+      <h3 id="chart-title">📈 响应趋势图</h3>
+      <span class="close" onclick="closeAllModals()">×</span>
+    </div>
+    <div id="main-chart"></div>
+  </div>
+
+  <script>
+    const overlay = document.getElementById('overlay');
+    let myChart = null;
+
+
+    function openModal(id) {
+      overlay.style.display = 'block';
+      document.getElementById(id).style.display = 'block';
+    }
+    function closeAllModals() {
+      overlay.style.display = 'none';
+      document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
+    }
+
+    // ✅ 你要求保留的修复逻辑：添加任务异步错误提示
+    async function submitAddTask() {
+      const n = document.getElementById('add-name').value.trim();
+      const u = document.getElementById('add-url').value.trim();
+      if (!n || !u) return alert("请填写完整");
+
+      async function doSubmit(force) {
+        return fetch('/api/task/add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: n, url: u, force })
+        });
+      }
+
+      try {
+        let r = await doSubmit(false);
+        if (r.ok) {
+          alert("添加成功");
+          return window.location.reload();
+        }
+        const msg = await r.text();
+
+        // 后端返回 422 -> 连通性校验失败，可强制添加
+        if (r.status === 422) {
+          if (confirm(msg + "\n是否强制添加？")) {
+            r = await doSubmit(true);
+            if (!r.ok) {
+              const msg2 = await r.text();
+              return alert("强制添加失败: " + msg2);
+            }
+            alert("已强制添加");
+            return window.location.reload();
+          }
+          return;
+        }
+
+        return alert("添加失败: " + msg);
+      } catch (e) {
+        alert("请求失败: " + e);
+      }
+    }
+
+
+    async function deleteTask(id) {
+      if (!confirm("确认删除该任务吗？")) return;
+      try {
+        const r = await fetch('/api/task/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id })
+        });
+        if (!r.ok) {
+          const msg = await r.text();
+          return alert("删除失败: " + msg);
+        }
+        window.location.reload();
+      } catch (e) {
+        alert("请求失败: " + e);
+      }
+    }
+
+    async function submitSettings() {
+      const cfg = {
+        interval: parseInt(document.getElementById('set-interval').value, 10),
+        alert_threshold: parseInt(document.getElementById('set-threshold').value, 10),
+        alert_cooldown: parseInt(document.getElementById('set-cooldown').value, 10),
+        smtp: {
+          enabled: document.getElementById('set-enabled').checked,
+          host: document.getElementById('set-host').value.trim(),
+          port: parseInt(document.getElementById('set-port').value, 10),
+          username: document.getElementById('set-user').value.trim(),
+          password: document.getElementById('set-pass').value,
+          to: document.getElementById('set-to').value.trim()
+        }
+      };
+      try {
+        const r = await fetch('/api/settings/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(cfg)
+        });
+        if (!r.ok) {
+          const msg = await r.text();
+          return alert("保存失败: " + msg);
+        }
+        alert("保存成功");
+        window.location.reload();
+      } catch (e) {
+        alert("请求失败: " + e);
+      }
+    }
+
+    async function clearLogs() {
+      if (!confirm("确定清空日志吗？")) return;
+      try {
+        const r = await fetch('/api/logs/clear', { method: 'POST' });
+        if (!r.ok) {
+          const msg = await r.text();
+          return alert("清空失败: " + msg);
+        }
+        alert("日志已清空");
+        window.location.reload();
+      } catch (e) {
+        alert("请求失败: " + e);
+      }
+    }
+
+    function showChart(id, name) {
+      openModal('chart-modal');
+      document.getElementById('chart-title').innerText = `📈 ${name} 响应趋势`;
+
+      if (!myChart) {
+        myChart = echarts.init(document.getElementById('main-chart'));
+      }
+      myChart.showLoading();
+
+      fetch('/api/chart?id=' + id)
+        .then(r => r.json())
+        .then(data => {
+          myChart.hideLoading();
+          myChart.setOption({
+            backgroundColor: 'transparent',
+            grid: { left: '8%', right: '5%', top: '10%', bottom: '12%' },
+            tooltip: { trigger: 'axis' },
+            xAxis: {
+              type: 'category',
+              data: data.times,
+              axisLabel: { color: '#c7d2fe' }
+            },
+            yAxis: {
+              type: 'value',
+              axisLabel: { color: '#c7d2fe' },
+              splitLine: { lineStyle: { color: 'rgba(255,255,255,.12)' } }
+            },
+            series: [{
+              name: '响应时间(ms)',
+              type: 'line',
+              data: data.values,
+              smooth: true,
+              showSymbol: false,
+              lineStyle: { width: 2, color: '#5b8cff' },
+              areaStyle: { opacity: .2, color: '#5b8cff' }
+            }]
+          });
+          myChart.resize();
+        })
+        .catch(() => {
+          myChart.hideLoading();
+          alert("趋势图加载失败");
+        });
+    }
+
+    async function updateSysStats() {
+      try {
+        const r = await fetch('/api/sys/stats');
+        if (!r.ok) return;
+        const data = await r.json();
+        document.getElementById('sys-uptime').innerText = data.uptime;
+        document.getElementById('sys-go').innerText = data.goroutines;
+        document.getElementById('sys-mem').innerText = data.memory;
+      } catch (_) { }
+    }
+
+    updateSysStats();
+    setInterval(updateSysStats, 1000);
+    window.addEventListener('resize', () => { if (myChart) myChart.resize(); });
+
+    // 页面自动刷新（仅在没打开弹窗时）
+    setInterval(() => {
+      if (overlay.style.display !== 'block') window.location.reload();
+    }, 5000);
+
+    const THEME_KEY = "theme-mode"; // auto|light|dark
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+
+    function applyTheme(mode) {
+      let finalMode = mode;
+      if (mode === "auto") {
+        finalMode = media.matches ? "dark" : "light";
+      }
+      document.documentElement.setAttribute("data-theme", finalMode);
+      const sel = document.getElementById("theme-select");
+      if (sel) sel.value = mode;
+    }
+
+    function setThemeMode(mode) {
+      localStorage.setItem(THEME_KEY, mode);
+      applyTheme(mode);
+    }
+
+    // 初始化
+    (function () {
+      const saved = localStorage.getItem(THEME_KEY) || "auto";
+      applyTheme(saved);
+    })();
+
+    // 系统主题变化时，auto模式自动切
+    media.addEventListener("change", () => {
+      const mode = localStorage.getItem(THEME_KEY) || "auto";
+      if (mode === "auto") applyTheme("auto");
+    });
+  </script>
+</body>
+
+</html>
