@@ -133,7 +133,7 @@ func (m *Manager) AddTask(name, rawURL string) (model.MonitorTask, error) {
 	}
 
 	if !strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://") {
-		rawURL = "https://" + rawURL
+		rawURL = "http://" + rawURL
 	}
 
 	u, err := url.ParseRequestURI(rawURL)
@@ -226,4 +226,18 @@ func (m *Manager) saveLocked() error {
 		return err
 	}
 	return os.WriteFile(m.path, data, 0644)
+}
+
+// 切换任务的标星状态
+func (m *Manager) ToggleStar(id int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for i, t := range m.cfg.Tasks {
+		if t.ID == id {
+			m.cfg.Tasks[i].Starred = !t.Starred // 状态反转：true变false，false变true
+			return m.saveLocked()               // 存入 config.json
+		}
+	}
+	return fmt.Errorf("未找到指定任务")
 }

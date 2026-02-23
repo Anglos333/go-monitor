@@ -252,6 +252,7 @@ func (s *Service) checkURL(task model.MonitorTask, ch chan<- model.MonitorResult
 		ID:         task.ID,
 		TaskName:   task.Name,
 		URL:        task.URL,
+		Starred:    task.Starred, // 把星星状态复制给结果
 		LastUpdate: time.Now().Format("15:04:05"),
 	}
 

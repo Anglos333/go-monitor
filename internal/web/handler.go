@@ -2,6 +2,7 @@
 package web
 
 import (
+	"embed"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -18,6 +20,9 @@ import (
 	"monitor/internal/monitor"
 	"monitor/internal/repository"
 )
+
+//go:embed templates/index.html
+var templateFS embed.FS
 
 // Handler 聚合了配置、仓储、监控服务以及模板，处理所有 HTTP 请求。
 type Handler struct {
@@ -29,7 +34,12 @@ type Handler struct {
 }
 
 // New 创建 Web 处理器实例。
-func New(cfg *config.Manager, repo *repository.Repo, mon *monitor.Service, tpl *template.Template, start time.Time) *Handler {
+func New(cfg *config.Manager, repo *repository.Repo, mon *monitor.Service, start time.Time) *Handler {
+	// 🔥 使用 ParseFS 从内存里读取网页
+	tpl, err := template.ParseFS(templateFS, "templates/index.html")
+	if err != nil {
+		panic("解析内置模板失败: " + err.Error())
+	}
 	return &Handler{cfg: cfg, repo: repo, mon: mon, tpl: tpl, start: start}
 }
 
@@ -43,6 +53,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/api/logs/clear", h.clearLogsHandler)
 	mux.HandleFunc("/api/sys/stats", h.sysStatsHandler)
 	mux.HandleFunc("/api/logs/export", h.exportCsvHandler)
+	mux.HandleFunc("/api/task/star", h.toggleStarHandler)
 }
 
 // webHandler 渲染主页面，传入当前监控结果、最近事件日志和配置（隐藏密码）。
@@ -51,13 +62,25 @@ func (h *Handler) webHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cfg := h.cfg.Get()
-	cfg.SMTP.Password = "" // 不将密码返回到前端
+	cfg.SMTP.Password = ""
+
+	// 🔥 获取结果并进行智能排序
+	results := h.mon.Results()
+	sort.Slice(results, func(i, j int) bool {
+		// 规则1：如果标星状态不同，标星(true)的排在前面
+		if results[i].Starred != results[j].Starred {
+			return results[i].Starred
+		}
+		// 规则2：如果标星状态一样，按 ID 升序排列 (强迫症狂喜)
+		return results[i].ID < results[j].ID
+	})
+
 	data := struct {
 		Results []model.MonitorResult
 		Logs    []model.EventLog
 		Config  model.Config
 	}{
-		Results: h.mon.Results(),
+		Results: results, // 🔥 用排序后的结果替换
 		Logs:    h.repo.QueryEvents(50),
 		Config:  cfg,
 	}
@@ -243,4 +266,25 @@ func probeURL(raw string) error {
 		return fmt.Errorf("状态码异常: %d", resp2.StatusCode)
 	}
 	return nil
+}
+
+// 🔥 新增：处理前端点亮星星的请求
+func (h *Handler) toggleStarHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		ID int `json:"id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := h.cfg.ToggleStar(req.ID); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	h.mon.TriggerNow() // 刷新一下状态
+	w.WriteHeader(http.StatusOK)
 }

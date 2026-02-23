@@ -6,38 +6,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>哈基米监控系统 · 控制台</title>
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
-  <script>
-    // 将主题初始化前置，防止页面加载时闪烁 (FOUC)
-    const THEME_KEY = "theme-mode";
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    
-    function applyTheme(mode) {
-      let finalMode = mode === "auto" ? (media.matches ? "dark" : "light") : mode;
-      document.documentElement.setAttribute("data-theme", finalMode);
-    }
-    applyTheme(localStorage.getItem(THEME_KEY) || "auto");
-  </script>
   <style>
-    /* 核心 CSS 变量系统 */
-    :root, html[data-theme="light"] {
-      --bg: #f4f6f8;
+    :root {
+      --bg: #f3f6ff;
       --panel: #ffffff;
       --text: #1f2937;
       --muted: #6b7280;
       --line: #e5e7eb;
-      --primary: #4f46e5;
-      --green: #10b981;
-      --yellow: #f59e0b;
-      --red: #ef4444;
-      
-      --top-bg: rgba(255, 255, 255, 0.85);
-      --grad-1: rgba(79, 70, 229, 0.05);
-      --grad-2: rgba(16, 185, 129, 0.05);
-      --modal-bg: #ffffff;
-      --input-bg: #f9fafb;
-      --th-bg: #f3f4f6;
-      --hover-bg: rgba(0, 0, 0, 0.03);
-      --shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
     }
 
     html[data-theme="dark"] {
@@ -46,223 +21,377 @@
       --text: #e8ecff;
       --muted: #9aa6d1;
       --line: #253056;
-      --primary: #5c7eff;
-      --green: #34d399;
-      --yellow: #fbbf24;
-      --red: #f87171;
-      
-      --top-bg: rgba(11, 16, 32, 0.85);
-      --grad-1: #22326b;
-      --grad-2: #3f2a74;
-      --modal-bg: linear-gradient(180deg, #151e36, #0e1428);
-      --input-bg: rgba(255, 255, 255, 0.03);
-      --th-bg: rgba(255, 255, 255, 0.03);
-      --hover-bg: rgba(255, 255, 255, 0.03);
-      --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
     }
 
-    * { box-sizing: border-box; }
+    html[data-theme="light"] {
+      --bg: #f3f6ff;
+      --panel: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+    }
+
+    * {
+      box-sizing: border-box
+    }
 
     body {
       margin: 0;
       font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
       background:
-        radial-gradient(1200px 500px at 10% -20%, var(--grad-1) 0%, transparent 60%),
-        radial-gradient(1000px 450px at 90% -10%, var(--grad-2) 0%, transparent 55%),
+        radial-gradient(1200px 500px at 10% -20%, #22326b 0%, transparent 60%),
+        radial-gradient(1000px 450px at 90% -10%, #3f2a74 0%, transparent 55%),
         var(--bg);
-      background-attachment: fixed;
       color: var(--text);
       min-height: 100vh;
-      transition: background 0.3s, color 0.3s;
     }
 
     .top {
       position: sticky;
       top: 0;
       z-index: 20;
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      background: var(--top-bg);
-      border-bottom: 1px solid var(--line);
-      padding: 14px 20px;
+      backdrop-filter: blur(8px);
+      background: rgba(11, 16, 32, .7);
+      border-bottom: 1px solid rgba(255, 255, 255, .08);
+      padding: 14px 18px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       gap: 16px;
-      transition: background 0.3s;
     }
 
-    .title { font-size: 18px; font-weight: 700; letter-spacing: .5px; }
-    .stats { display: flex; gap: 14px; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
-    
-    .chip {
-      border: 1px solid var(--line);
-      background: var(--panel);
-      border-radius: 999px;
-      padding: 6px 12px;
+    .title {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: .5px
+    }
+
+    .stats {
       display: flex;
-      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+      color: var(--muted);
+      font-size: 13px
+    }
+
+    .chip {
+      border: 1px solid rgba(255, 255, 255, .12);
+      background: rgba(255, 255, 255, .04);
+      border-radius: 999px;
+      padding: 6px 10px;
     }
 
     .container {
       max-width: 1260px;
-      margin: 20px auto;
-      padding: 0 16px 24px;
+      margin: 18px auto;
+      padding: 0 14px 24px;
       display: grid;
       grid-template-columns: 2fr 1fr;
-      gap: 16px;
+      gap: 14px;
     }
 
-    @media (max-width: 980px) { .container { grid-template-columns: 1fr; } }
+    @media (max-width: 980px) {
+      .container {
+        grid-template-columns: 1fr
+      }
+    }
 
     .card {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 16px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, .04), rgba(255, 255, 255, .01));
+      border: 1px solid rgba(255, 255, 255, .08);
+      border-radius: var(--radius);
       box-shadow: var(--shadow);
-      padding: 18px;
-      transition: background 0.3s, border-color 0.3s;
+      padding: 14px;
     }
 
     .card-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 14px;
+      margin-bottom: 10px;
     }
 
-    .card-title { font-size: 16px; font-weight: 700; }
-    .muted { color: var(--muted); }
-    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .card-title {
+      font-size: 16px;
+      font-weight: 700
+    }
+
+    .muted {
+      color: var(--muted)
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap
+    }
 
     .btn {
       border: none;
       outline: none;
       cursor: pointer;
-      border-radius: 8px;
-      padding: 8px 14px;
+      border-radius: 10px;
+      padding: 8px 12px;
       font-size: 13px;
-      font-weight: 500;
       color: #fff;
-      transition: all .2s ease;
-      background: #475569;
+      transition: .18s ease;
+      background: #334155;
     }
 
-    .btn:hover { transform: translateY(-1px); filter: brightness(1.1); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-    .btn:active { transform: translateY(0); }
+    .btn:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.06)
+    }
 
-    .btn-primary { background: var(--primary); }
-    .btn-success { background: var(--green); }
-    .btn-warn { background: var(--yellow); color: #1f2937; }
-    .btn-danger { background: var(--red); }
+    .btn-primary {
+      background: var(--primary)
+    }
+
+    .btn-success {
+      background: var(--green)
+    }
+
+    .btn-warn {
+      background: #f59e0b
+    }
+
+    .btn-danger {
+      background: var(--red)
+    }
+
     .btn-ghost {
       background: transparent;
-      border: 1px solid var(--line);
+      border: 1px solid rgba(255, 255, 255, .2);
       color: var(--text);
     }
-    .btn-ghost:hover { background: var(--hover-bg); }
 
     .table-wrap {
       overflow: auto;
-      border: 1px solid var(--line);
-      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, .08);
+      border-radius: 12px
     }
 
-    table { width: 100%; border-collapse: collapse; min-width: 760px; font-size: 13px; }
-    th, td { padding: 12px 16px; border-bottom: 1px solid var(--line); vertical-align: middle; }
-    th { text-align: left; color: var(--text); background: var(--th-bg); position: sticky; top: 0; font-weight: 600; }
-    tr:last-child td { border-bottom: none; }
-    tr:hover td { background: var(--hover-bg); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 760px;
+      font-size: 13px;
+    }
 
-    .url { color: var(--muted); font-size: 12px; word-break: break-all; margin-top: 4px; }
-    .badge { padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; color: #fff; }
-    
-    .bg-green { background: var(--green); }
-    .bg-yellow { background: var(--yellow); color: #1f2937; }
-    .bg-red { background: var(--red); }
+    th,
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, .07);
+      vertical-align: middle;
+    }
 
-    .dots { display: flex; gap: 6px; align-items: center; }
-    .dot { width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 4px rgba(0,0,0,0.1); }
-    .dot-green { background: var(--green); }
-    .dot-yellow { background: var(--yellow); }
-    .dot-red { background: var(--red); }
+    th {
+      text-align: left;
+      color: #c7d2fe;
+      background: rgba(255, 255, 255, .03);
+      position: sticky;
+      top: 0;
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, .02)
+    }
+
+    .url {
+      color: var(--muted);
+      font-size: 12px;
+      word-break: break-all
+    }
+
+    .badge {
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .bg-green {
+      background: var(--green)
+    }
+
+    .bg-yellow {
+      background: var(--yellow);
+      color: #1f2937
+    }
+
+    .bg-red {
+      background: var(--red)
+    }
+
+    .dots {
+      display: flex;
+      gap: 4px;
+      align-items: center
+    }
+
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%
+    }
+
+    .dot-green {
+      background: var(--green)
+    }
+
+    .dot-yellow {
+      background: var(--yellow)
+    }
+
+    .dot-red {
+      background: var(--red)
+    }
 
     .log-list {
       max-height: 620px;
       overflow: auto;
-      border: 1px solid var(--line);
+      border: 1px solid rgba(255, 255, 255, .08);
       border-radius: 12px;
       padding: 8px;
-      background: var(--input-bg);
+      background: rgba(0, 0, 0, .15);
     }
-    .log-item { border-bottom: 1px dashed var(--line); padding: 10px 6px; font-size: 13px; }
-    .log-item:last-child { border-bottom: none; }
-    .log-time { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
-    .tag-warn { color: var(--red); font-weight: 700; margin-right: 4px; }
-    .tag-ok { color: var(--green); font-weight: 700; margin-right: 4px; }
+
+    .log-item {
+      border-bottom: 1px dashed rgba(255, 255, 255, .12);
+      padding: 8px 4px;
+    }
+
+    .log-time {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 4px
+    }
+
+    .tag-warn {
+      color: #fca5a5;
+      font-weight: 700
+    }
+
+    .tag-ok {
+      color: #86efac;
+      font-weight: 700
+    }
 
     /* modal */
     .overlay {
-      display: none; position: fixed; inset: 0;
-      background: rgba(0, 0, 0, .5);
-      backdrop-filter: blur(4px);
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, .6);
       z-index: 99;
-      animation: fadeIn 0.2s ease;
     }
-    
-    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    @keyframes popIn { from { transform: translate(-50%, -48%) scale(0.96); opacity: 0; } to { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
 
     .modal {
-      display: none; z-index: 100; position: fixed; left: 50%; top: 50%;
+      display: none;
+      z-index: 100;
+      position: fixed;
+      left: 50%;
+      top: 50%;
       transform: translate(-50%, -50%);
-      width: min(560px, 92vw); max-height: 88vh; overflow: auto;
-      border-radius: 16px; border: 1px solid var(--line);
-      background: var(--modal-bg);
+      width: min(560px, 92vw);
+      max-height: 88vh;
+      overflow: auto;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, .15);
+      background: linear-gradient(180deg, #0f1730, #0e1428);
       box-shadow: var(--shadow);
-      padding: 20px;
-      animation: popIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      padding: 14px;
     }
 
-    #chart-modal { width: min(980px, 95vw); }
-    #main-chart { height: 420px; width: 100%; }
+    #chart-modal {
+      width: min(980px, 95vw)
+    }
 
-    .modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-    .modal-head h3 { margin: 0; font-size: 18px; color: var(--text); }
-    
+    #main-chart {
+      height: 420px
+    }
+
+    .modal-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
     .close {
-      cursor: pointer; font-size: 24px; color: var(--muted);
-      width: 32px; height: 32px; border-radius: 8px;
-      display: flex; align-items: center; justify-content: center;
-      transition: all 0.2s;
+      cursor: pointer;
+      font-size: 22px;
+      color: #cbd5e1;
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
-    .close:hover { background: var(--hover-bg); color: var(--text); }
 
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-    @media (max-width: 680px) { .grid { grid-template-columns: 1fr; } }
+    .close:hover {
+      background: rgba(255, 255, 255, .08)
+    }
 
-    .field label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; font-weight: 500; }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    @media (max-width: 680px) {
+      .grid {
+        grid-template-columns: 1fr
+      }
+    }
+
+    .field label {
+      display: block;
+      font-size: 12px;
+      color: #a5b4fc;
+      margin-bottom: 4px;
+    }
+
     .field input {
-      width: 100%; padding: 10px 12px; border-radius: 8px;
-      border: 1px solid var(--line); background: var(--input-bg);
-      color: var(--text); outline: none; transition: border 0.2s, box-shadow 0.2s;
-      font-family: inherit;
-    }
-    .field input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15); }
-
-    .hr { height: 1px; background: var(--line); margin: 16px 0; }
-    .right { display: flex; justify-content: flex-end; }
-    .tiny { font-size: 12px; color: var(--muted); margin-top: 4px;}
-    .strike { text-decoration: line-through; color: var(--muted); opacity: 0.7; }
-    
-    select {
-      background: var(--input-bg);
+      width: 100%;
+      padding: 9px 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, .15);
+      background: rgba(255, 255, 255, .03);
       color: var(--text);
-      border: 1px solid var(--line);
-      padding: 4px 8px;
-      border-radius: 6px;
       outline: none;
-      font-family: inherit;
+    }
+
+    .field input:focus {
+      border-color: #7c93ff;
+      box-shadow: 0 0 0 3px rgba(92, 126, 255, .18)
+    }
+
+    .hr {
+      height: 1px;
+      background: rgba(255, 255, 255, .1);
+      margin: 10px 0
+    }
+
+    .full {
+      width: 100%
+    }
+
+    .right {
+      display: flex;
+      justify-content: flex-end
+    }
+
+    .tiny {
+      font-size: 12px;
+      color: var(--muted)
+    }
+
+    .strike {
+      text-decoration: line-through;
+      color: #94a3b8
     }
   </style>
 </head>
@@ -271,9 +400,9 @@
   <div class="top">
     <div class="title">🚀 哈基米监控系统 · 分层版控制台</div>
     <div class="stats">
-      <div class="chip">⏱️ 运行时长：<span id="sys-uptime" style="margin-left:4px;font-weight:600;">--</span></div>
-      <div class="chip">🧵 协程：<span id="sys-go" style="margin-left:4px;font-weight:600;">--</span></div>
-      <div class="chip">💾 内存：<span id="sys-mem" style="margin-left:4px;font-weight:600;">--</span></div>
+      <div class="chip">⏱️ 运行时长：<span id="sys-uptime">--</span></div>
+      <div class="chip">🧵 协程：<span id="sys-go">--</span></div>
+      <div class="chip">💾 内存：<span id="sys-mem">--</span></div>
     </div>
     <div class="chip">
       🎨 主题：
@@ -315,7 +444,7 @@
             <tr>
               <td>{{.ID}}</td>
               <td>
-                <div style="font-weight:600;">{{.TaskName}}</div>
+                <div><strong>{{.TaskName}}</strong></div>
                 <div class="url">{{.URL}}</div>
               </td>
               <td><span class="badge bg-{{.StatusColor}}">{{.Status}}</span></td>
@@ -324,11 +453,12 @@
                   {{range .HistoryDots}}<span class="dot dot-{{.}}"></span>{{end}}
                 </div>
               </td>
-              <td style="font-family: monospace;">{{.Duration}}</td>
+              <td>{{.Duration}}</td>
               <td>
                 <div class="actions">
-                  <button class="btn btn-ghost" onclick="showChart({{.ID}}, '{{.TaskName}}')" title="查看趋势">📊</button>
-                  <button class="btn btn-ghost" onclick="deleteTask({{.ID}})" title="删除任务" style="color: var(--red); border-color: transparent;">🗑️</button>
+                  <button class="btn btn-ghost" onclick='showChart({{.ID}}, "{{.TaskName}}")'>📊</button>
+<!-- 或使用双引号属性，内部用单引号包裹字符串 -->
+<button class="btn btn-ghost" onclick="showChart({{.ID}}, '{{.TaskName}}')">📊</button>
                 </div>
               </td>
             </tr>
@@ -361,8 +491,10 @@
     </aside>
   </div>
 
+  <!-- Overlay -->
   <div id="overlay" class="overlay" onclick="closeAllModals()"></div>
 
+  <!-- Add Modal -->
   <div id="add-modal" class="modal">
     <div class="modal-head">
       <h3>➕ 添加监控任务</h3>
@@ -372,15 +504,16 @@
       <label>任务名称</label>
       <input id="add-name" type="text" placeholder="例如：我的博客首页" />
     </div>
-    <div class="field" style="margin-top:14px;">
+    <div class="field" style="margin-top:10px;">
       <label>URL（支持不带协议，会自动补 http://）</label>
       <input id="add-url" type="text" placeholder="example.com 或 https://example.com" />
     </div>
-    <div style="margin-top:20px;" class="right">
+    <div style="margin-top:12px;" class="right">
       <button class="btn btn-primary" onclick="submitAddTask()">确认添加</button>
     </div>
   </div>
 
+  <!-- Settings Modal -->
   <div id="settings-modal" class="modal">
     <div class="modal-head">
       <h3>⚙️ 系统设置</h3>
@@ -400,10 +533,10 @@
         <label>静默冷却（分钟）</label>
         <input id="set-cooldown" type="number" min="0" value="{{.Config.AlertCooldown}}" />
       </div>
-      <div class="field" style="display:flex;align-items:center;">
-        <label style="display:flex;gap:8px;align-items:center;margin:0;cursor:pointer;">
-          <input id="set-enabled" type="checkbox" style="width:18px;height:18px;cursor:pointer;" {{if .Config.SMTP.Enabled}}checked{{end}} />
-          <span style="font-size:14px;color:var(--text);">启用邮件告警</span>
+      <div class="field" style="display:flex;align-items:flex-end;">
+        <label style="display:flex;gap:8px;align-items:center;">
+          <input id="set-enabled" type="checkbox" style="width:auto;" {{if .Config.SMTP.Enabled}}checked{{end}} />
+          启用邮件告警
         </label>
       </div>
     </div>
@@ -433,11 +566,12 @@
       </div>
     </div>
 
-    <div style="margin-top:20px;" class="right">
+    <div style="margin-top:12px;" class="right">
       <button class="btn btn-primary" onclick="submitSettings()">保存设置</button>
     </div>
   </div>
 
+  <!-- Chart Modal -->
   <div id="chart-modal" class="modal">
     <div class="modal-head">
       <h3 id="chart-title">📈 响应趋势图</h3>
@@ -450,20 +584,21 @@
     const overlay = document.getElementById('overlay');
     let myChart = null;
 
+
     function openModal(id) {
       overlay.style.display = 'block';
       document.getElementById(id).style.display = 'block';
     }
-    
     function closeAllModals() {
       overlay.style.display = 'none';
       document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
     }
 
+    // ✅ 你要求保留的修复逻辑：添加任务异步错误提示
     async function submitAddTask() {
       const n = document.getElementById('add-name').value.trim();
       const u = document.getElementById('add-url').value.trim();
-      if (!n || !u) return alert("主人，请填写完整的任务名称和URL哦！");
+      if (!n || !u) return alert("请填写完整");
 
       async function doSubmit(force) {
         return fetch('/api/task/add', {
@@ -476,11 +611,12 @@
       try {
         let r = await doSubmit(false);
         if (r.ok) {
-          alert("添加成功！");
+          alert("添加成功");
           return window.location.reload();
         }
         const msg = await r.text();
 
+        // 后端返回 422 -> 连通性校验失败，可强制添加
         if (r.status === 422) {
           if (confirm(msg + "\n是否强制添加？")) {
             r = await doSubmit(true);
@@ -488,19 +624,21 @@
               const msg2 = await r.text();
               return alert("强制添加失败: " + msg2);
             }
-            alert("已强制添加！");
+            alert("已强制添加");
             return window.location.reload();
           }
           return;
         }
+
         return alert("添加失败: " + msg);
       } catch (e) {
         alert("请求失败: " + e);
       }
     }
 
+
     async function deleteTask(id) {
-      if (!confirm("确认要删除该任务吗？")) return;
+      if (!confirm("确认删除该任务吗？")) return;
       try {
         const r = await fetch('/api/task/delete', {
           method: 'POST',
@@ -541,7 +679,7 @@
           const msg = await r.text();
           return alert("保存失败: " + msg);
         }
-        alert("保存成功！");
+        alert("保存成功");
         window.location.reload();
       } catch (e) {
         alert("请求失败: " + e);
@@ -549,14 +687,14 @@
     }
 
     async function clearLogs() {
-      if (!confirm("确定清空所有日志吗？清空后无法恢复哦！")) return;
+      if (!confirm("确定清空日志吗？")) return;
       try {
         const r = await fetch('/api/logs/clear', { method: 'POST' });
         if (!r.ok) {
           const msg = await r.text();
           return alert("清空失败: " + msg);
         }
-        alert("日志已清空！");
+        alert("日志已清空");
         window.location.reload();
       } catch (e) {
         alert("请求失败: " + e);
@@ -572,10 +710,6 @@
       }
       myChart.showLoading();
 
-      // 动态获取当前主题下的文字颜色，解决 ECharts 字体颜色写死的问题
-      const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text').trim();
-      const lineColor = getComputedStyle(document.documentElement).getPropertyValue('--line').trim();
-
       fetch('/api/chart?id=' + id)
         .then(r => r.json())
         .then(data => {
@@ -583,16 +717,16 @@
           myChart.setOption({
             backgroundColor: 'transparent',
             grid: { left: '8%', right: '5%', top: '10%', bottom: '12%' },
-            tooltip: { trigger: 'axis', backgroundColor: 'rgba(255, 255, 255, 0.9)', textStyle: { color: '#333' } },
+            tooltip: { trigger: 'axis' },
             xAxis: {
               type: 'category',
               data: data.times,
-              axisLabel: { color: textColor }
+              axisLabel: { color: '#c7d2fe' }
             },
             yAxis: {
               type: 'value',
-              axisLabel: { color: textColor },
-              splitLine: { lineStyle: { color: lineColor } }
+              axisLabel: { color: '#c7d2fe' },
+              splitLine: { lineStyle: { color: 'rgba(255,255,255,.12)' } }
             },
             series: [{
               name: '响应时间(ms)',
@@ -600,21 +734,15 @@
               data: data.values,
               smooth: true,
               showSymbol: false,
-              lineStyle: { width: 3, color: '#5b8cff' },
-              areaStyle: { 
-                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                  { offset: 0, color: 'rgba(91, 140, 255, 0.5)' },
-                  { offset: 1, color: 'rgba(91, 140, 255, 0.05)' }
-                ])
-              }
+              lineStyle: { width: 2, color: '#5b8cff' },
+              areaStyle: { opacity: .2, color: '#5b8cff' }
             }]
           });
           myChart.resize();
         })
         .catch(() => {
           myChart.hideLoading();
-          // 如果后端接口没写好，这里可以静默或提示
-          console.warn("趋势图接口请求失败，请检查后端 /api/chart 是否已实现");
+          alert("趋势图加载失败");
         });
     }
 
@@ -633,58 +761,52 @@
     setInterval(updateSysStats, 1000);
     window.addEventListener('resize', () => { if (myChart) myChart.resize(); });
 
+    // 页面自动刷新（仅在没打开弹窗时）
     setInterval(() => {
       if (overlay.style.display !== 'block') window.location.reload();
     }, 5000);
 
+    const THEME_KEY = "theme-mode"; // auto|light|dark
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+
+    function applyTheme(mode) {
+      let finalMode = mode;
+      if (mode === "auto") {
+        finalMode = media.matches ? "dark" : "light";
+      }
+      document.documentElement.setAttribute("data-theme", finalMode);
+      const sel = document.getElementById("theme-select");
+      if (sel) sel.value = mode;
+    }
+
     function setThemeMode(mode) {
       localStorage.setItem(THEME_KEY, mode);
       applyTheme(mode);
-      
-      const sel = document.getElementById("theme-select");
-      if (sel) sel.value = mode;
-
-      // 如果图表正在显示，重新渲染以应用新颜色
-      if (myChart && overlay.style.display === 'block') {
-         // 稍微延迟等待 CSS 变量更新生效
-         setTimeout(() => {
-           const newTextColor = getComputedStyle(document.documentElement).getPropertyValue('--text').trim();
-           const newLineColor = getComputedStyle(document.documentElement).getPropertyValue('--line').trim();
-           myChart.setOption({
-             xAxis: { axisLabel: { color: newTextColor } },
-             yAxis: { 
-               axisLabel: { color: newTextColor },
-               splitLine: { lineStyle: { color: newLineColor } } 
-             }
-           });
-         }, 50);
-      }
     }
 
+    // 初始化
     (function () {
       const saved = localStorage.getItem(THEME_KEY) || "auto";
-      const sel = document.getElementById("theme-select");
-      if (sel) sel.value = saved;
+      applyTheme(saved);
     })();
 
+    // 系统主题变化时，auto模式自动切
     media.addEventListener("change", () => {
       const mode = localStorage.getItem(THEME_KEY) || "auto";
-      if (mode === "auto") {
-        applyTheme("auto");
-        // 更新图表（如果打开的话）
-        if (myChart && overlay.style.display === 'block') {
-           setTimeout(() => {
-             const newTextColor = getComputedStyle(document.documentElement).getPropertyValue('--text').trim();
-             const newLineColor = getComputedStyle(document.documentElement).getPropertyValue('--line').trim();
-             myChart.setOption({
-               xAxis: { axisLabel: { color: newTextColor } },
-               yAxis: { axisLabel: { color: newTextColor }, splitLine: { lineStyle: { color: newLineColor } } }
-             });
-           }, 50);
-        }
-      }
+      if (mode === "auto") applyTheme("auto");
     });
   </script>
+  // 在脚本底部加上这段代码
+function updateDocTitle() {
+  const failCount = document.querySelectorAll('.bg-red').length;
+  if (failCount > 0) {
+    document.title = `🔴 [${failCount}] 节点故障 - 监控台`;
+  } else {
+    document.title = `🟢 全站绿灯 - 监控台`;
+  }
+}
+// 每次加载/刷新页面时执行一次
+updateDocTitle();
 </body>
 
 </html>

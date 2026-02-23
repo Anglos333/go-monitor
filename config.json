@@ -7,44 +7,51 @@
     "host": "smtp.qq.com",
     "port": 465,
     "username": "your_email@qq.com",
-    "password": "3G7NMfuPVrM89WfkgpmyteoqcdhmKe0SbkT+JGBWamI=",
+    "password": "klKOP9TPPe5e1rurywUEAafID8ytMEzjPii3CPhZvoc=",
     "to": "receive_email@qq.com"
   },
   "tasks": [
     {
       "id": 1,
       "name": "百度搜索",
-      "url": "https://www.baidu.com"
+      "url": "https://www.baidu.com",
+      "starred": false
     },
     {
       "id": 2,
       "name": "111",
-      "url": "http://111"
+      "url": "http://111",
+      "starred": false
     },
     {
       "id": 3,
       "name": "bilbil",
-      "url": "http://www.bilbil.com"
+      "url": "http://www.bilbil.com",
+      "starred": false
     },
     {
       "id": 4,
       "name": "Googel",
-      "url": "http://www.bilbil.com"
+      "url": "http://www.bilbil.com",
+      "starred": false
     },
     {
       "id": 5,
       "name": "斗鱼",
-      "url": "https://www.douyu.com"
+      "url": "https://www.douyu.com",
+      "starred": false
     },
     {
       "id": 6,
       "name": "2",
-      "url": "https://2"
+      "url": "https://2",
+      "starred": false
     },
     {
       "id": 7,
       "name": "Googel",
-      "url": "https://www.douyu.com"
+      "url": "https://www.douyu.com",
+      "starred": false
     }
   ]
 }

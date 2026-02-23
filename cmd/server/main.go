@@ -3,8 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"html/template"
-	"log"
+	"log" // 移除了 "html/template"
 	"net/http"
 	"time"
 
@@ -18,13 +17,13 @@ import (
 // 1. 记录启动时间，用于后续页面显示运行时长。
 // 2. 初始化配置管理器，加载配置文件，若失败则使用默认配置。
 // 3. 初始化数据库仓储层，用于持久化存储监控结果。
-// 4. 解析HTML模板，用于渲染Web管理页面。
+// 4. (已迁移) 模板解析现在交由 web 包通过 go:embed 内部处理！
 // 5. 创建监控核心实例，并启动监控循环（独立goroutine）。
 // 6. 如果配置了SMTP，则异步执行邮件自检，确保系统重启时能发送通知。
-// 7. 创建Web处理器，注册路由，并启动HTTP服务器监听9091端口。
+// 7. 创建Web处理器，注册路由，并启动HTTP服务器监听9090端口。
 func main() {
 	start := time.Now()
-	fmt.Println("🚀 哈基米监控系统（分层版）启动...")
+	fmt.Println("🚀 哈基米监控系统（单文件部署终极版）启动...")
 
 	cfgMgr := config.NewManager("config.json")
 	if err := cfgMgr.LoadOrDefault(); err != nil {
@@ -36,10 +35,7 @@ func main() {
 		log.Fatal("init db failed:", err)
 	}
 
-	tpl, err := template.ParseFiles("templates/index.html")
-	if err != nil {
-		log.Fatal("parse template failed:", err)
-	}
+	// ❌ 这里原本有 template.ParseFiles，现在光荣下岗了！
 
 	mon := monitor.New(cfgMgr, repo)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -47,7 +43,6 @@ func main() {
 	go mon.Start(ctx)
 
 	// 如果SMTP功能已启用，则进行邮件自检
-	// 目的是在系统重启后立即发送一条通知，证明监控已恢复运行
 	if cfgMgr.Get().SMTP.Enabled {
 		go func() {
 			fmt.Println("📧 正在后台进行邮件自检...")
@@ -59,8 +54,8 @@ func main() {
 		}()
 	}
 
-	// 创建Web处理器，注入配置、仓储、监控实例、模板和启动时间
-	h := web.New(cfgMgr, repo, mon, tpl, start)
+	// ✅ 创建Web处理器：注意这里的参数，已经把 tpl 去掉了！
+	h := web.New(cfgMgr, repo, mon, start)
 	mux := http.NewServeMux()
 	h.Register(mux)
 

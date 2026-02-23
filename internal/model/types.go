@@ -27,9 +27,10 @@ type SMTPConfig struct {
 
 // MonitorResult 用于 Web 页面展示的监控结果视图模型，聚合了最新检查信息和历史状态。
 type MonitorTask struct {
-	ID   int    `json:"id"`
-	Name string `json:"name"`
-	URL  string `json:"url"`
+	ID      int    `json:"id"`
+	Name    string `json:"name"`
+	URL     string `json:"url"`
+	Starred bool   `json:"starred"` // 是否标星置顶
 }
 
 type MonitorResult struct {
@@ -44,6 +45,7 @@ type MonitorResult struct {
 	IsSuccess   bool
 	LastUpdate  string   // 上次检查时间格式化字符串
 	HistoryDots []string // 历史状态点阵，用于图表显示
+	Starred     bool     // 传递给前端的标星状态
 }
 
 // TaskState 用于内部维护每个任务的动态状态（失败计数、上次告警时间、是否宕机）。
