@@ -113,7 +113,18 @@ func (m *Manager) LoadOrDefault() error {
 	if m.cfg.AlertCooldown < 0 {
 		m.cfg.AlertCooldown = 60
 	}
+	// 兼容旧配置文件，初始化发号器
+	if m.cfg.NextTaskID <= 0 {
+		maxID := 0
+		for _, t := range m.cfg.Tasks {
+			if t.ID > maxID {
+				maxID = t.ID
+			}
+		}
+		m.cfg.NextTaskID = maxID + 1 // 把发号器拨到最大值的下一位
+	}
 	return nil
+
 }
 
 func (m *Manager) Get() model.Config {
@@ -157,17 +168,14 @@ func (m *Manager) AddTask(name, rawURL string) (model.MonitorTask, error) {
 		}
 	}
 
-	maxID := 0
-	for _, t := range m.cfg.Tasks {
-		if t.ID > maxID {
-			maxID = t.ID
-		}
-	}
+	// 直接用发号器的号码创建任务
 	task := model.MonitorTask{
-		ID:   maxID + 1,
+		ID:   m.cfg.NextTaskID, // 🔥 从全局发号器取号
 		Name: name,
 		URL:  rawURL,
 	}
+
+	m.cfg.NextTaskID++ // 🔥 发号器自增（永远向前，绝不回头！）
 	m.cfg.Tasks = append(m.cfg.Tasks, task)
 	return task, m.saveLocked()
 }

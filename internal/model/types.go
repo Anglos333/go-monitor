@@ -11,6 +11,7 @@ type Config struct {
 	Interval       int           `json:"interval"`
 	AlertThreshold int           `json:"alert_threshold"`
 	AlertCooldown  int           `json:"alert_cooldown"`
+	NextTaskID     int           `json:"next_task_id"` // 全局自增发号器
 	SMTP           SMTPConfig    `json:"smtp"`
 	Tasks          []MonitorTask `json:"tasks"`
 }

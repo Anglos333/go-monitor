@@ -2,31 +2,26 @@
   "interval": 5,
   "alert_threshold": 3,
   "alert_cooldown": 60,
+  "next_task_id": 8,
   "smtp": {
     "enabled": true,
     "host": "smtp.qq.com",
     "port": 465,
     "username": "your_email@qq.com",
-    "password": "klKOP9TPPe5e1rurywUEAafID8ytMEzjPii3CPhZvoc=",
+    "password": "ggV27onmYxwTY5+6Efrmapqf442R/L/pJZUu6hqhvwyhL4vJ4TiNsRXZ817Mr9nhLhegzOYzBw==",
     "to": "receive_email@qq.com"
   },
   "tasks": [
     {
       "id": 1,
-      "name": "百度搜索",
-      "url": "https://www.baidu.com",
+      "name": "本地监控后台",
+      "url": "http://127.0.0.1:9090",
       "starred": false
     },
     {
       "id": 2,
-      "name": "111",
-      "url": "http://111",
-      "starred": false
-    },
-    {
-      "id": 3,
-      "name": "bilbil",
-      "url": "http://www.bilbil.com",
+      "name": "百度搜索",
+      "url": "https://www.baidu.com",
       "starred": false
     },
     {
@@ -37,20 +32,8 @@
     },
     {
       "id": 5,
-      "name": "斗鱼",
-      "url": "https://www.douyu.com",
-      "starred": false
-    },
-    {
-      "id": 6,
-      "name": "2",
-      "url": "https://2",
-      "starred": false
-    },
-    {
-      "id": 7,
-      "name": "Googel",
-      "url": "https://www.douyu.com",
+      "name": "bing",
+      "url": "http://www.bing.com",
       "starred": false
     }
   ]
