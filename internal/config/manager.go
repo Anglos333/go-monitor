@@ -4,6 +4,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -17,14 +18,66 @@ import (
 	"monitor/internal/model"
 )
 
-// 🔥 定义一个32字节的密钥 (AES-256)
-// 注意：在真实的商业项目中，这个密钥通常放在环境变量里，这里为了方便部署直接硬编码。
-var secretKey = []byte("HakimiMonitorKey1234567890123456")
+// 🔥 AES 密钥来源：环境变量 MONITOR_SECRET_KEY（推荐），未提供则使用兼容的默认值。
+// 为兼容历史密文，默认值保持不变；生产环境请务必设置 MONITOR_SECRET_KEY。
+var secretKey = loadSecretKey()
+
+func loadSecretKey() []byte {
+	raw := os.Getenv("MONITOR_SECRET_KEY")
+	if raw == "" {
+		raw = "HakimiMonitorKey1234567890123456"
+	}
+	sum := sha256.Sum256([]byte(raw))
+	return sum[:]
+}
 
 type Manager struct {
 	mu   sync.RWMutex
 	path string
 	cfg  model.Config
+}
+
+// ResetToExample 用 config.example.json 覆盖当前配置，并返回新配置。
+// 调用方应在外层加额外校验（如密码确认）。
+func (m *Manager) ResetToExample(examplePath string) (model.Config, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	data, err := os.ReadFile(examplePath)
+	if err != nil {
+		return model.Config{}, err
+	}
+	var cfg model.Config
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return model.Config{}, err
+	}
+
+	// 兼容初始化逻辑
+	if cfg.Interval <= 0 {
+		cfg.Interval = 5
+	}
+	if cfg.AlertThreshold <= 0 {
+		cfg.AlertThreshold = 3
+	}
+	if cfg.AlertCooldown < 0 {
+		cfg.AlertCooldown = 60
+	}
+	if cfg.NextTaskID <= 0 {
+		maxID := 0
+		for _, t := range cfg.Tasks {
+			if t.ID > maxID {
+				maxID = t.ID
+			}
+		}
+		cfg.NextTaskID = maxID + 1
+	}
+
+	// 密码是明文存储在内存，落盘时会加密
+	m.cfg = cfg
+	if err := m.saveLocked(); err != nil {
+		return model.Config{}, err
+	}
+	return cfg, nil
 }
 
 func NewManager(path string) *Manager {
@@ -236,16 +289,16 @@ func (m *Manager) saveLocked() error {
 	return os.WriteFile(m.path, data, 0644)
 }
 
-// 切换任务的标星状态
-func (m *Manager) ToggleStar(id int) error {
+// 切换任务的标星状态，返回最新状态（true 表示已标星）
+func (m *Manager) ToggleStar(id int) (bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	for i, t := range m.cfg.Tasks {
 		if t.ID == id {
-			m.cfg.Tasks[i].Starred = !t.Starred // 状态反转：true变false，false变true
-			return m.saveLocked()               // 存入 config.json
+			m.cfg.Tasks[i].Starred = !t.Starred
+			return m.cfg.Tasks[i].Starred, m.saveLocked()
 		}
 	}
-	return fmt.Errorf("未找到指定任务")
+	return false, fmt.Errorf("未找到指定任务")
 }

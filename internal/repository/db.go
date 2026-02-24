@@ -14,6 +14,15 @@ type Repo struct {
 	DB *gorm.DB
 }
 
+// Close 关闭底层数据库连接。
+func (r *Repo) Close() error {
+	sqlDB, err := r.DB.DB()
+	if err != nil {
+		return err
+	}
+	return sqlDB.Close()
+}
+
 // New 初始化 SQLite 数据库连接，并自动迁移 EventLog 和 PerformanceLog 表。
 func New(path string) (*Repo, error) {
 	db, err := gorm.Open(sqlite.Open(path), &gorm.Config{})

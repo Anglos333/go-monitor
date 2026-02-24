@@ -549,9 +549,9 @@
           </thead>
           <tbody>
             {{range .Results}}
-            <tr>
+            <tr data-id="{{.ID}}">
               <td>
-                <span style="cursor:pointer; font-size: 16px; margin-right: 4px; user-select: none;" onclick="toggleStar({{.ID}})" title="标星置顶">
+                <span class="star-icon" style="cursor:pointer; font-size: 16px; margin-right: 4px; user-select: none;" onclick="toggleStar({{.ID}}, event)" title="标星置顶">
                   {{if .Starred}}⭐{{else}}☆{{end}}
                 </span>
                 {{.ID}}
@@ -684,6 +684,12 @@
     <div style="margin-top:20px;" class="right">
       <button class="btn btn-primary" onclick="submitSettings()">保存设置</button>
     </div>
+
+    <div class="hr" style="margin:16px 0;"></div>
+    <div class="right" style="gap:10px; display:flex; justify-content:flex-end; align-items:center;">
+      <button class="btn" onclick="doBackup()">🛟 备份配置与数据库</button>
+      <button class="btn btn-warn" onclick="doReset()">🧹 重置为示例配置</button>
+    </div>
   </div>
 
   <div id="chart-modal" class="modal">
@@ -811,6 +817,42 @@
       }
     }
 
+    async function doBackup() {
+      if (!confirm("确认立即备份 config.json 与 monitor.db 到 ./backup 目录？")) return;
+      try {
+        const r = await fetch('/api/backup', { method: 'POST' });
+        if (!r.ok) {
+          const msg = await r.text();
+          return alert("备份失败: " + msg);
+        }
+        const data = await r.json();
+        alert("备份成功:\n" + (data.files || []).join('\n'));
+      } catch (e) {
+        alert("备份请求失败: " + e);
+      }
+    }
+
+    async function doReset() {
+      if (!confirm("⚠️ 重置将删除现有数据库并恢复示例配置，确认继续？")) return;
+      const pwd = prompt("请输入重置密码(RESET_SECRET，默认 hakimi-reset)：");
+      if (pwd === null || pwd === "") return;
+      try {
+        const r = await fetch('/api/reset', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: pwd })
+        });
+        if (!r.ok) {
+          const msg = await r.text();
+          return alert("重置失败: " + msg);
+        }
+        alert("重置成功，页面将刷新");
+        window.location.reload();
+      } catch (e) {
+        alert("重置请求失败: " + e);
+      }
+    }
+
     function showChart(id, name) {
       openModal('chart-modal');
       document.getElementById('chart-title').innerText = `📈 ${name} 响应趋势`;
@@ -858,6 +900,27 @@
             }]
           });
           myChart.resize();
+
+          // 定时刷新当前图表数据（5s），仅在模态打开时启用
+          if (window.chartTimer) clearInterval(window.chartTimer);
+          window.chartTimer = setInterval(() => {
+            if (overlay.style.display !== 'block') {
+              clearInterval(window.chartTimer);
+              return;
+            }
+            fetch('/api/chart?id=' + id)
+              .then(r => r.json())
+              .then(next => {
+                const curText = getComputedStyle(document.documentElement).getPropertyValue('--text').trim();
+                const curLine = getComputedStyle(document.documentElement).getPropertyValue('--line').trim();
+                myChart.setOption({
+                  xAxis: { data: next.times, axisLabel: { color: curText } },
+                  yAxis: { axisLabel: { color: curText }, splitLine: { lineStyle: { color: curLine } } },
+                  series: [{ data: next.values }]
+                });
+              })
+              .catch(() => { });
+          }, 5000);
         })
         .catch(() => {
           myChart.hideLoading();
@@ -881,8 +944,49 @@
     setInterval(updateSysStats, 1000);
     window.addEventListener('resize', () => { if (myChart) myChart.resize(); });
 
+    // 🔄 用定时拉取数据替代整页刷新（避免闪烁和状态丢失）
+    async function refreshData() {
+      try {
+        const [sysR, resR] = await Promise.all([
+          fetch('/api/sys/stats'),
+          fetch('/api/results')
+        ]);
+
+        if (sysR.ok) {
+          const data = await sysR.json();
+          document.getElementById('sys-uptime').innerText = data.uptime;
+          document.getElementById('sys-go').innerText = data.goroutines;
+          document.getElementById('sys-mem').innerText = data.memory;
+        }
+
+        if (resR.ok) {
+          const list = await resR.json();
+          // 局部刷新任务列表的状态和历史点
+          list.forEach(item => {
+            const tr = document.querySelector(`tr[data-id="${item.id}"]`);
+            if (!tr) return;
+            // 状态文本与颜色
+            const badge = tr.querySelector('.badge');
+            if (badge) {
+              badge.className = `badge bg-${item.statusColor}`;
+              badge.textContent = item.status;
+            }
+            // 耗时
+            const durationCell = tr.querySelector('[data-field="duration"]');
+            if (durationCell) durationCell.textContent = item.duration;
+            // 历史点
+            const dotsBox = tr.querySelector('.dots');
+            if (dotsBox && Array.isArray(item.historyDots)) {
+              dotsBox.innerHTML = item.historyDots.map(d => `<span class="dot dot-${d}"></span>`).join('');
+            }
+          });
+        }
+      } catch (_) { }
+    }
     setInterval(() => {
-      if (overlay.style.display !== 'block') window.location.reload();
+      if (overlay.style.display !== 'block') {
+        refreshData();
+      }
     }, 5000);
 
     function setThemeMode(mode) {
@@ -959,7 +1063,35 @@
     updateDocTitle();
 
     // 🔥 标星置顶的交互逻辑
-    async function toggleStar(id) {
+    // 标星防抖 & 本地置顶：不整页刷新
+    const starLock = new Set();
+    function moveRowToTop(tr) {
+      const tbody = tr?.parentElement;
+      if (!tbody) return;
+      tbody.insertBefore(tr, tbody.firstChild);
+    }
+
+    function sortTbodyById(tbody) {
+      if (!tbody) return;
+      const rows = Array.from(tbody.querySelectorAll('tr'));
+      rows.sort((a, b) => {
+        const ida = parseInt(a.getAttribute('data-id'), 10);
+        const idb = parseInt(b.getAttribute('data-id'), 10);
+        return ida - idb;
+      });
+      rows.forEach(r => tbody.appendChild(r));
+    }
+
+    async function toggleStar(id, evt) {
+      if (starLock.has(id)) return;
+      starLock.add(id);
+
+      // 拿到当前行与星标元素
+      const span = evt?.target || event?.target;
+      const tr = span?.closest('tr');
+      const wasStar = span?.textContent === '⭐';
+      if (span) span.textContent = wasStar ? '☆' : '⭐'; // 乐观切换
+
       try {
         const r = await fetch('/api/task/star', {
           method: 'POST',
@@ -968,11 +1100,26 @@
         });
         if (!r.ok) {
           const msg = await r.text();
+          if (span) span.textContent = wasStar ? '⭐' : '☆'; // 回滚
           return alert("操作失败: " + msg);
         }
-        window.location.reload(); // 刷新页面看排序效果
+        const data = await r.json();
+        if (span) span.textContent = data.starred ? '⭐' : '☆';
+
+        // 本地排序：标星则置顶，取消标星则按 ID 升序复位
+        if (tr) {
+          const tbody = tr.parentElement;
+          if (data.starred) {
+            moveRowToTop(tr);
+          } else {
+            sortTbodyById(tbody);
+          }
+        }
       } catch (e) {
+        if (span) span.textContent = wasStar ? '⭐' : '☆';
         alert("请求失败: " + e);
+      } finally {
+        starLock.delete(id);
       }
     }
   </script>

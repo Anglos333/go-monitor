@@ -36,19 +36,39 @@ type Service struct {
 // New 创建监控服务实例，初始化 HTTP 客户端和内部状态容器。
 func New(cfg *config.Manager, repo *repository.Repo) *Service {
 	return &Service{
-		cfg:  cfg,
-		repo: repo,
-		client: &http.Client{
-			Timeout: 5 * time.Second,
-			Transport: &http.Transport{
-				MaxIdleConns:          100,
-				IdleConnTimeout:       90 * time.Second,
-				TLSHandshakeTimeout:   5 * time.Second,
-				ExpectContinueTimeout: 1 * time.Second,
-			},
-		},
+		cfg:     cfg,
+		repo:    repo,
+		client:  buildHTTPClient(cfg.Get().Interval),
 		states:  map[int]*model.TaskState{},
 		history: map[string][]string{},
+	}
+}
+
+// 根据配置构建 HTTP 客户端，可调整超时。
+func buildHTTPClient(intervalSec int) *http.Client {
+	// 探测超时不宜超过监控间隔，取 min(interval, 5s) 做基准
+	timeout := 5 * time.Second
+	if intervalSec > 0 {
+		iv := time.Duration(intervalSec) * time.Second
+		if iv < timeout {
+			timeout = iv
+		}
+	}
+	return &http.Client{
+		Timeout: timeout,
+		Transport: &http.Transport{
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   5 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		},
+		// 避免无限重定向：最多 3 次
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 3 {
+				return http.ErrUseLastResponse
+			}
+			return nil
+		},
 	}
 }
 
@@ -86,6 +106,8 @@ func (s *Service) TriggerNow() {
 func (s *Service) runOnce(tasks []model.MonitorTask, threshold, cooldownMin int) {
 	s.runMu.Lock()
 	defer s.runMu.Unlock()
+	// 每轮根据最新配置重建客户端（适配间隔/超时变化）
+	s.client = buildHTTPClient(s.cfg.Get().Interval)
 	s.runBatch(tasks, threshold, cooldownMin)
 }
 
@@ -103,6 +125,18 @@ func (s *Service) Results() []model.MonitorResult {
 	return out
 }
 
+// UpdateStar 在内存结果中同步标星状态，避免前端快速点击时出现跳变。
+// 仅更新已有结果，不影响配置存储。
+func (s *Service) UpdateStar(taskID int, starred bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.results {
+		if s.results[i].ID == taskID {
+			s.results[i].Starred = starred
+		}
+	}
+}
+
 // RemoveTaskState 删除指定任务的所有状态（states、history、results），用于任务删除后清理。
 func (s *Service) RemoveTaskState(taskID int, taskURL string) {
 	s.mu.Lock()
@@ -118,6 +152,17 @@ func (s *Service) RemoveTaskState(taskID int, taskURL string) {
 		}
 	}
 	s.results = filtered
+}
+
+// Reset 清空内部状态并切换到新的仓储连接。
+func (s *Service) Reset(repo *repository.Repo) {
+	s.mu.Lock()
+	s.results = nil
+	s.states = map[int]*model.TaskState{}
+	s.history = map[string][]string{}
+	s.mu.Unlock()
+
+	s.repo = repo
 }
 
 // runBatch 并发检查所有任务，更新状态并处理告警/恢复逻辑。
@@ -271,6 +316,9 @@ func (s *Service) checkURL(task model.MonitorTask, ch chan<- model.MonitorResult
 		ch <- res
 		return
 	}
+
+	// 统一设置 UA，便于后端识别与排查
+	req.Header.Set("User-Agent", "HakimiMonitor/1.0")
 
 	resp, err := s.client.Do(req)
 	ms := time.Since(start).Milliseconds()

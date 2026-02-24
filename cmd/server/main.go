@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"log" // 移除了 "html/template"
+	"log"
 	"net/http"
 	"time"
 

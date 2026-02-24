@@ -9,6 +9,8 @@ import (
 	"html/template"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strconv"
@@ -47,6 +49,7 @@ func New(cfg *config.Manager, repo *repository.Repo, mon *monitor.Service, start
 func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/", h.webHandler)
 	mux.HandleFunc("/api/chart", h.chartDataHandler)
+	mux.HandleFunc("/api/results", h.resultsHandler)
 	mux.HandleFunc("/api/task/add", h.addTaskHandler)
 	mux.HandleFunc("/api/task/delete", h.deleteTaskHandler)
 	mux.HandleFunc("/api/settings/update", h.updateSettingsHandler)
@@ -54,6 +57,29 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/api/sys/stats", h.sysStatsHandler)
 	mux.HandleFunc("/api/logs/export", h.exportCsvHandler)
 	mux.HandleFunc("/api/task/star", h.toggleStarHandler)
+	mux.HandleFunc("/api/backup", h.backupHandler)
+	mux.HandleFunc("/api/reset", h.resetHandler)
+}
+
+// resultsHandler 返回当前监控结果（含 HistoryDots），用于前端局部刷新列表。
+func (h *Handler) resultsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	res := h.mon.Results()
+
+	// 保持与页面排序规则一致：标星优先，其次按 ID 升序
+	sort.Slice(res, func(i, j int) bool {
+		if res[i].Starred != res[j].Starred {
+			return res[i].Starred
+		}
+		return res[i].ID < res[j].ID
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(res)
 }
 
 // webHandler 渲染主页面，传入当前监控结果、最近事件日志和配置（隐藏密码）。
@@ -281,10 +307,124 @@ func (h *Handler) toggleStarHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := h.cfg.ToggleStar(req.ID); err != nil {
+	starred, err := h.cfg.ToggleStar(req.ID)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	h.mon.TriggerNow() // 刷新一下状态
-	w.WriteHeader(http.StatusOK)
+
+	// 立即同步到监控结果缓存，避免前端快速点击时的闪烁/反复横跳
+	h.mon.UpdateStar(req.ID, starred)
+
+	// 异步刷新一次探测，确保后续数据一致
+	h.mon.TriggerNow()
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"starred": starred,
+	})
+}
+
+// backupHandler 备份 config.json 与 monitor.db 到 backup 目录。
+func (h *Handler) backupHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	ts := time.Now().Format("20060102-150405")
+	backupDir := "backup"
+	os.MkdirAll(backupDir, 0755)
+
+	files := []string{"config.json", "monitor.db"}
+	copied := []string{}
+	for _, f := range files {
+		dst := filepath.Join(backupDir, fmt.Sprintf("%s-%s", ts, filepath.Base(f)))
+		if err := copyFile(f, dst); err != nil {
+			http.Error(w, "备份失败: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		copied = append(copied, dst)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"files": copied,
+	})
+}
+
+// resetHandler 需要密码确认：恢复 config.example.json，清空/重建 monitor.db。
+func (h *Handler) resetHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	secret := os.Getenv("RESET_SECRET")
+	if secret == "" {
+		secret = "hakimi-reset" // 默认口令，可通过环境变量覆盖
+	}
+	if req.Password != secret {
+		http.Error(w, "密码错误", http.StatusUnauthorized)
+		return
+	}
+
+	// 1) 关闭数据库连接
+	_ = h.repo.Close()
+
+	// 2) 删除数据库文件
+	_ = os.Remove("monitor.db")
+
+	// 3) 重置配置
+	cfg, err := h.cfg.ResetToExample("config.example.json")
+	if err != nil {
+		http.Error(w, "重置配置失败: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// 4) 重建 repo
+	repo, err := repository.New("monitor.db")
+	if err != nil {
+		http.Error(w, "重建数据库失败: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	h.repo = repo
+
+	// 5) 刷新监控服务内存状态
+	h.mon.Reset(h.repo)
+	h.mon.TriggerNow()
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"config":  cfg,
+		"message": "重置完成",
+	})
+}
+
+// copyFile 复制文件（覆盖目标）。
+func copyFile(src, dst string) error {
+	srcF, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer srcF.Close()
+
+	dstF, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer dstF.Close()
+
+	if _, err := io.Copy(dstF, srcF); err != nil {
+		return err
+	}
+	return dstF.Sync()
 }
