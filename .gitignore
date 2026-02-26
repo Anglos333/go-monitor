@@ -20,3 +20,6 @@ monitor.db
 
 #数据本分不上传
 backup/
+
+#本地设置不上传
+config.json
