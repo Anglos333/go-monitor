@@ -74,7 +74,7 @@ go-monitor/
 ### 2. 获取代码与依赖
 
 ```bash
-git clone [https://github.com/您的用户名/go-monitor.git](https://github.com/您的用户名/go-monitor.git)
+git clone [https://github.com/Anglos333/go-monitor.git](https://github.com/Anglos333/go-monitor.git)
 cd go-monitor
 go mod tidy
 
@@ -130,7 +130,7 @@ Setting:
 
 ---
 
-**Author**: [你的名字]
+**Author**: [Angelos333]
 
 **Date**: 2026-02
 
