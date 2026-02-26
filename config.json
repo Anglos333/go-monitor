@@ -2,33 +2,39 @@
   "interval": 5,
   "alert_threshold": 3,
   "alert_cooldown": 60,
-  "next_task_id": 4,
   "smtp": {
     "enabled": true,
     "host": "smtp.qq.com",
     "port": 465,
     "username": "your_email@qq.com",
-    "password": "gYYnUDIuWxCD1Zyr42HXc2FXgTSrBCrV4BBfkj9r+sBxx+Crj3rYNpWvr6aQSgFdL+Kor2Nyow==",
+    "password": "UQ4AoKXSUa395TAi2Y1uNJMjeAQMWrwYAruMsZnY9HQvXB91QMyN9Wwifls+DgrJ7YUdrxRj+F+e8+a6hPosieIaP+X3WGqKkONSzQrvmjMYrZggSQzbURBZphnFmGTONNTNNu7C+FI=",
     "to": "receive_email@qq.com"
   },
   "tasks": [
     {
       "id": 1,
       "name": "本地监控后台",
-      "url": "http://127.0.0.1:9090",
-      "starred": false
+      "url": "http://127.0.0.1:9090"
     },
     {
       "id": 2,
       "name": "百度搜索",
-      "url": "https://www.baidu.com",
-      "starred": false
+      "url": "https://www.baidu.com"
     },
     {
       "id": 3,
       "name": "斗鱼",
-      "url": "http://www.douyu.com",
-      "starred": false
+      "url": "http://www.douyu.com"
+    },
+    {
+      "id": 4,
+      "name": "bilbil",
+      "url": "http://www.bilibili.com"
+    },
+    {
+      "id": 5,
+      "name": "github",
+      "url": "http://www.github.com"
     }
   ]
 }

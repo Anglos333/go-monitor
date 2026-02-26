@@ -946,43 +946,55 @@
 
     // 🔄 用定时拉取数据替代整页刷新（避免闪烁和状态丢失）
     async function refreshData() {
-      try {
-        const [sysR, resR] = await Promise.all([
-          fetch('/api/sys/stats'),
-          fetch('/api/results')
-        ]);
+  try {
+    const [sysR, resR] = await Promise.all([
+      fetch('/api/sys/stats'),
+      fetch('/api/results')
+    ]);
 
-        if (sysR.ok) {
-          const data = await sysR.json();
-          document.getElementById('sys-uptime').innerText = data.uptime;
-          document.getElementById('sys-go').innerText = data.goroutines;
-          document.getElementById('sys-mem').innerText = data.memory;
-        }
-
-        if (resR.ok) {
-          const list = await resR.json();
-          // 局部刷新任务列表的状态和历史点
-          list.forEach(item => {
-            const tr = document.querySelector(`tr[data-id="${item.id}"]`);
-            if (!tr) return;
-            // 状态文本与颜色
-            const badge = tr.querySelector('.badge');
-            if (badge) {
-              badge.className = `badge bg-${item.statusColor}`;
-              badge.textContent = item.status;
-            }
-            // 耗时
-            const durationCell = tr.querySelector('[data-field="duration"]');
-            if (durationCell) durationCell.textContent = item.duration;
-            // 历史点
-            const dotsBox = tr.querySelector('.dots');
-            if (dotsBox && Array.isArray(item.historyDots)) {
-              dotsBox.innerHTML = item.historyDots.map(d => `<span class="dot dot-${d}"></span>`).join('');
-            }
-          });
-        }
-      } catch (_) { }
+    if (sysR.ok) {
+      const data = await sysR.json();
+      document.getElementById('sys-uptime').innerText = data.uptime;
+      document.getElementById('sys-go').innerText = data.goroutines;
+      document.getElementById('sys-mem').innerText = data.memory;
     }
+
+    if (resR.ok) {
+      const list = await resR.json();
+
+      list.forEach(item => {
+        // 同时兼容 Go 默认大写字段 & 你前端小写字段
+        const id = item.id ?? item.ID;
+        const status = item.status ?? item.Status;
+        const statusColor = item.statusColor ?? item.StatusColor;
+        const duration = item.duration ?? item.Duration;
+        const historyDots = item.historyDots ?? item.HistoryDots;
+
+        const tr = document.querySelector(`tr[data-id="${id}"]`);
+        if (!tr) return;
+
+        // 状态
+        const badge = tr.querySelector('.badge');
+        if (badge) {
+          badge.className = `badge bg-${statusColor}`;
+          badge.textContent = status;
+        }
+
+        // 耗时（优先找 data-field，没有则兜底第5列）
+        let durationCell = tr.querySelector('[data-field="duration"]');
+        if (!durationCell) durationCell = tr.children[4];
+        if (durationCell) durationCell.textContent = duration;
+
+        // 历史点
+        const dotsBox = tr.querySelector('.dots');
+        if (dotsBox && Array.isArray(historyDots)) {
+          dotsBox.innerHTML = historyDots.map(d => `<span class="dot dot-${d}"></span>`).join('');
+        }
+      });
+    }
+  } catch (_) {}
+}
+
     setInterval(() => {
       if (overlay.style.display !== 'block') {
         refreshData();
