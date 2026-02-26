@@ -117,8 +117,16 @@ go build -o HakimiMonitor.exe ./cmd/server
 ```
 
 ## 📸 运行截图
+Console:
+<img width="917" height="418" alt="{CEE72352-EBF9-4C85-8E5D-C592B214A91B}" src="https://github.com/user-attachments/assets/917dc9d3-d521-42f4-8a67-33721c274a71" />
 
-*(建议在此处放置 2-3 张截图，如：深色模式的控制台主页、ECharts 趋势弹窗、收到的报警邮件截图)*
+ECharts:
+<img width="741" height="367" alt="{1BF49748-5DB9-4023-8D96-FD7AD14CA060}" src="https://github.com/user-attachments/assets/8ff18f9d-ae03-4995-a794-24d9b95c3d9d" />
+
+Setting:
+<img width="801" height="508" alt="{4BF1101B-704D-44F8-BCFF-36A9318E84E0}" src="https://github.com/user-attachments/assets/8758dd3e-ac80-4dab-9e35-8d7686acc4b4" />
+
+
 
 ---
 
