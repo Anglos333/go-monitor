@@ -7,7 +7,7 @@
     "host": "smtp.qq.com",
     "port": 465,
     "username": "your_email@qq.com",
-    "password": "UQ4AoKXSUa395TAi2Y1uNJMjeAQMWrwYAruMsZnY9HQvXB91QMyN9Wwifls+DgrJ7YUdrxRj+F+e8+a6hPosieIaP+X3WGqKkONSzQrvmjMYrZggSQzbURBZphnFmGTONNTNNu7C+FI=",
+    "password": "在此填写你的授权码",
     "to": "receive_email@qq.com"
   },
   "tasks": [
@@ -24,17 +24,17 @@
     {
       "id": 3,
       "name": "斗鱼",
-      "url": "http://www.douyu.com"
+      "url": "https://www.douyu.com"
     },
     {
       "id": 4,
-      "name": "bilbil",
-      "url": "http://www.bilibili.com"
+      "name": "Google",
+      "url": "https://www.google.com"
     },
     {
       "id": 5,
       "name": "github",
-      "url": "http://www.github.com"
+      "url": "https://www.github.com"
     }
   ]
 }
