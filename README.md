@@ -1,4 +1,3 @@
-```markdown
 # 🚀 Go-Monitor: 企业级轻量高并发服务监控系统 (V15.1 最终版)
 
 ![Go Version](https://img.shields.io/badge/Go-1.20+-00ADD8?style=flat&logo=go)
