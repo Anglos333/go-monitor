@@ -2,39 +2,57 @@
   "interval": 5,
   "alert_threshold": 3,
   "alert_cooldown": 60,
+  "next_task_id": 8,
   "smtp": {
     "enabled": true,
     "host": "smtp.qq.com",
     "port": 465,
     "username": "your_email@qq.com",
-    "password": "在此填写你的授权码",
+    "password": "UHd3wu7FRdfgo9b6nt/Bb3e0IJAH1LDZZgQpx+1RXMBAEnP/UZpjrrPt7sXGjpTQw2W1YJiM+w==",
     "to": "receive_email@qq.com"
   },
   "tasks": [
     {
       "id": 1,
       "name": "本地监控后台",
-      "url": "http://127.0.0.1:9090"
+      "url": "http://127.0.0.1:9090",
+      "starred": false
     },
     {
       "id": 2,
       "name": "百度搜索",
-      "url": "https://www.baidu.com"
+      "url": "https://www.baidu.com",
+      "starred": false
     },
     {
       "id": 3,
       "name": "Bing",
-      "url": "https://www.bing.com"
+      "url": "https://www.bing.com",
+      "starred": false
     },
     {
       "id": 4,
       "name": "Google",
-      "url": "https://www.google.com"
+      "url": "https://www.google.com",
+      "starred": false
     },
     {
       "id": 5,
       "name": "github",
-      "url": "https://www.github.com"
+      "url": "https://www.github.com",
+      "starred": false
+    },
+    {
+      "id": 6,
+      "name": "百度",
+      "url": "http://www.baidu.com",
+      "starred": false
+    },
+    {
+      "id": 7,
+      "name": "百度",
+      "url": "http://www.baidu.com",
+      "starred": false
     }
   ]
 }

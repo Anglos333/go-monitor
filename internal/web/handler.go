@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -17,40 +18,53 @@ import (
 	"strings"
 	"time"
 
+	"monitor/internal/analysis"
 	"monitor/internal/config"
 	"monitor/internal/model"
 	"monitor/internal/monitor"
 	"monitor/internal/repository"
 )
 
-//go:embed templates/index.html
+//go:embed templates/index.html templates/assets/*
 var templateFS embed.FS
 
 // Handler 聚合了配置、仓储、监控服务以及模板，处理所有 HTTP 请求。
 type Handler struct {
-	cfg   *config.Manager
-	repo  *repository.Repo
-	mon   *monitor.Service
-	start time.Time
-	tpl   *template.Template
+	cfg    *config.Manager
+	repo   *repository.Repo
+	mon    *monitor.Service
+	ai     *analysis.Service
+	start  time.Time
+	tpl    *template.Template
+	assets http.Handler
 }
 
 // New 创建 Web 处理器实例。
-func New(cfg *config.Manager, repo *repository.Repo, mon *monitor.Service, start time.Time) *Handler {
+func New(cfg *config.Manager, repo *repository.Repo, mon *monitor.Service, ai *analysis.Service, start time.Time) *Handler {
 	// 🔥 使用 ParseFS 从内存里读取网页
 	tpl, err := template.ParseFS(templateFS, "templates/index.html")
 	if err != nil {
 		panic("解析内置模板失败: " + err.Error())
 	}
-	return &Handler{cfg: cfg, repo: repo, mon: mon, tpl: tpl, start: start}
+	assetFS, err := fs.Sub(templateFS, "templates/assets")
+	if err != nil {
+		panic("解析内置静态资源失败: " + err.Error())
+	}
+	assets := http.StripPrefix("/assets/", http.FileServer(http.FS(assetFS)))
+	return &Handler{cfg: cfg, repo: repo, mon: mon, ai: ai, tpl: tpl, start: start, assets: assets}
 }
 
 // Register 将路由及其对应的处理函数注册到 ServeMux。
 func (h *Handler) Register(mux *http.ServeMux) {
+	mux.Handle("/assets/", h.assets)
 	mux.HandleFunc("/", h.webHandler)
 	mux.HandleFunc("/api/chart", h.chartDataHandler)
+	mux.HandleFunc("/api/performance/logs", h.performanceLogsHandler)
 	mux.HandleFunc("/api/results", h.resultsHandler)
+	mux.HandleFunc("/api/analysis/summary", h.analysisSummaryHandler)
+	mux.HandleFunc("/api/analysis/detail", h.analysisDetailHandler)
 	mux.HandleFunc("/api/task/add", h.addTaskHandler)
+	mux.HandleFunc("/api/task/update", h.updateTaskHandler)
 	mux.HandleFunc("/api/task/delete", h.deleteTaskHandler)
 	mux.HandleFunc("/api/settings/update", h.updateSettingsHandler)
 	mux.HandleFunc("/api/logs/clear", h.clearLogsHandler)
@@ -82,6 +96,29 @@ func (h *Handler) resultsHandler(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(res)
 }
 
+func (h *Handler) analysisSummaryHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	data := h.ai.Get(r.URL.Query().Get("force") == "1")
+	data.TaskBreakdown = nil
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(data)
+}
+
+func (h *Handler) analysisDetailHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	data := h.ai.Get(r.URL.Query().Get("force") == "1")
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(data)
+}
+
 // webHandler 渲染主页面，传入当前监控结果、最近事件日志和配置（隐藏密码）。
 func (h *Handler) webHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/favicon.ico" {
@@ -89,6 +126,7 @@ func (h *Handler) webHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	cfg := h.cfg.Get()
 	cfg.SMTP.Password = ""
+	cfg.Analysis.LLM.APIKey = ""
 
 	// 🔥 获取结果并进行智能排序
 	results := h.mon.Results()
@@ -102,13 +140,15 @@ func (h *Handler) webHandler(w http.ResponseWriter, r *http.Request) {
 	})
 
 	data := struct {
-		Results []model.MonitorResult
-		Logs    []model.EventLog
-		Config  model.Config
+		Results  []model.MonitorResult
+		Logs     []model.EventLog
+		Config   model.Config
+		Analysis model.StabilityAnalysis
 	}{
-		Results: results, // 🔥 用排序后的结果替换
-		Logs:    h.repo.QueryEvents(50),
-		Config:  cfg,
+		Results:  results, // 🔥 用排序后的结果替换
+		Logs:     h.repo.QueryEvents(50),
+		Config:   cfg,
+		Analysis: h.ai.Get(false),
 	}
 	_ = h.tpl.Execute(w, data)
 }
@@ -130,24 +170,21 @@ func (h *Handler) addTaskHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "请求体解析失败: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	req.Name = strings.TrimSpace(req.Name)
-	req.URL = strings.TrimSpace(req.URL)
-
-	// 按相同规则补全协议（用于探测）
-	testURL := req.URL
-	if !strings.HasPrefix(testURL, "http://") && !strings.HasPrefix(testURL, "https://") {
-		testURL = "https://" + testURL
+	name, normalizedURL, err := config.NormalizeAndValidateTaskInput(req.Name, req.URL)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	// 若非强制模式，进行连通性校验
 	if !req.Force {
-		if err := probeURL(testURL); err != nil {
+		if err := probeURL(normalizedURL); err != nil {
 			http.Error(w, "连通性校验失败: "+err.Error()+"（可选择强制添加）", http.StatusUnprocessableEntity)
 			return
 		}
 	}
 
-	_, err := h.cfg.AddTask(req.Name, req.URL)
+	_, err = h.cfg.AddTask(name, normalizedURL)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -156,6 +193,54 @@ func (h *Handler) addTaskHandler(w http.ResponseWriter, r *http.Request) {
 	h.mon.TriggerNow() // 立即执行一轮检查，让新任务快速显示结果
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("ok"))
+}
+
+// updateTaskHandler 处理监控任务修改请求，支持强制跳过连通性校验。
+func (h *Handler) updateTaskHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		ID    int    `json:"id"`
+		Name  string `json:"name"`
+		URL   string `json:"url"`
+		Force bool   `json:"force"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "请求体解析失败: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if req.ID <= 0 {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	name, normalizedURL, err := config.NormalizeAndValidateTaskInput(req.Name, req.URL)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if !req.Force {
+		if err := probeURL(normalizedURL); err != nil {
+			http.Error(w, "连通性校验失败: "+err.Error()+"（可选择强制保存）", http.StatusUnprocessableEntity)
+			return
+		}
+	}
+
+	task, oldURL, err := h.cfg.UpdateTask(req.ID, name, normalizedURL)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	h.mon.SyncUpdatedTask(task, oldURL)
+	h.mon.TriggerNow()
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(task)
 }
 
 // deleteTaskHandler 处理删除任务的请求，并从监控状态中清理相关数据。
@@ -232,6 +317,42 @@ func (h *Handler) chartDataHandler(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(out)
 }
 
+// performanceLogsHandler 返回指定任务最近若干条性能日志，供独立日志面板展示。
+func (h *Handler) performanceLogsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	id, err := strconv.Atoi(r.URL.Query().Get("id"))
+	if err != nil || id <= 0 {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	limit := 100
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		if v, err := strconv.Atoi(raw); err == nil && v > 0 {
+			limit = v
+		}
+	}
+
+	logs := h.repo.QueryPerformance(id, limit)
+	out := make([]map[string]any, 0, len(logs))
+	for _, l := range logs {
+		out = append(out, map[string]any{
+			"id":            l.ID,
+			"task_name":     l.TaskName,
+			"response_time": l.ResponseTime,
+			"check_time":    l.CheckTime,
+			"recorded_at":   l.CreatedAt.Format("2006-01-02 15:04:05"),
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(out)
+}
+
 // sysStatsHandler 返回系统运行状态（协程数、内存使用、运行时长）。
 func (h *Handler) sysStatsHandler(w http.ResponseWriter, r *http.Request) {
 	var m runtime.MemStats
@@ -248,6 +369,11 @@ func (h *Handler) sysStatsHandler(w http.ResponseWriter, r *http.Request) {
 
 // exportCsvHandler 导出所有事件日志为 CSV 文件，包含 UTF-8 BOM 头以便 Excel 正确打开。
 func (h *Handler) exportCsvHandler(w http.ResponseWriter, r *http.Request) {
+	if strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("kind")), "performance") {
+		h.exportPerformanceCsvHandler(w, r)
+		return
+	}
+
 	w.Header().Set("Content-Disposition", "attachment; filename=monitor_logs.csv")
 	w.Header().Set("Content-Type", "text/csv")
 	// 写入 UTF-8 BOM，使 Excel 识别中文
@@ -257,6 +383,31 @@ func (h *Handler) exportCsvHandler(w http.ResponseWriter, r *http.Request) {
 	for _, l := range h.repo.QueryEvents(0) {
 		_ = writer.Write([]string{
 			fmt.Sprintf("%d", l.ID), l.EventTime, l.TaskName, l.Type, l.Message, fmt.Sprintf("%v", l.IsResolved),
+		})
+	}
+	writer.Flush()
+}
+
+func (h *Handler) exportPerformanceCsvHandler(w http.ResponseWriter, r *http.Request) {
+	taskID, _ := strconv.Atoi(r.URL.Query().Get("id"))
+	filename := "performance_logs.csv"
+	if taskID > 0 {
+		filename = fmt.Sprintf("performance_logs_task_%d.csv", taskID)
+	}
+
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+	w.Header().Set("Content-Type", "text/csv")
+	_, _ = w.Write([]byte("\xEF\xBB\xBF"))
+	writer := csv.NewWriter(w)
+	_ = writer.Write([]string{"ID", "任务ID", "任务名称", "检测时间", "响应时间(ms)", "入库时间"})
+	for _, l := range h.repo.QueryPerformance(taskID, 0) {
+		_ = writer.Write([]string{
+			fmt.Sprintf("%d", l.ID),
+			fmt.Sprintf("%d", l.TaskID),
+			l.TaskName,
+			l.CheckTime,
+			fmt.Sprintf("%d", l.ResponseTime),
+			l.CreatedAt.Format("2006-01-02 15:04:05"),
 		})
 	}
 	writer.Flush()
@@ -400,6 +551,7 @@ func (h *Handler) resetHandler(w http.ResponseWriter, r *http.Request) {
 
 	// 5) 刷新监控服务内存状态
 	h.mon.Reset(h.repo)
+	h.ai.Reset(h.repo)
 	h.mon.TriggerNow()
 
 	w.Header().Set("Content-Type", "application/json")

@@ -47,6 +47,15 @@ func (r *Repo) ResolveDownEvents(taskName string) {
 		Update("is_resolved", true)
 }
 
+// QueryOpenAlerts 返回当前所有尚未恢复的宕机告警。
+func (r *Repo) QueryOpenAlerts() []model.EventLog {
+	var logs []model.EventLog
+	r.DB.Where("type = ? AND is_resolved = ?", "🔥 宕机警告", false).
+		Order("id desc").
+		Find(&logs)
+	return logs
+}
+
 // CreatePerformance 保存一条性能日志。
 func (r *Repo) CreatePerformance(p *model.PerformanceLog) {
 	r.DB.Create(p)
@@ -55,7 +64,14 @@ func (r *Repo) CreatePerformance(p *model.PerformanceLog) {
 // QueryPerformance 查询指定任务的最近 limit 条性能日志，按 ID 降序返回。
 func (r *Repo) QueryPerformance(taskID, limit int) []model.PerformanceLog {
 	var logs []model.PerformanceLog
-	r.DB.Where("task_id = ?", taskID).Order("id desc").Limit(limit).Find(&logs)
+	q := r.DB.Order("id desc")
+	if taskID > 0 {
+		q = q.Where("task_id = ?", taskID)
+	}
+	if limit > 0 {
+		q = q.Limit(limit)
+	}
+	q.Find(&logs)
 	return logs
 }
 

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"monitor/internal/analysis"
 	"monitor/internal/config"
 	"monitor/internal/monitor"
 	"monitor/internal/repository"
@@ -38,6 +39,7 @@ func main() {
 	// ❌ 这里原本有 template.ParseFiles，现在光荣下岗了！
 
 	mon := monitor.New(cfgMgr, repo)
+	ai := analysis.New(cfgMgr, repo, mon)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go mon.Start(ctx)
@@ -55,7 +57,7 @@ func main() {
 	}
 
 	// ✅ 创建Web处理器：注意这里的参数，已经把 tpl 去掉了！
-	h := web.New(cfgMgr, repo, mon, start)
+	h := web.New(cfgMgr, repo, mon, ai, start)
 	mux := http.NewServeMux()
 	h.Register(mux)
 

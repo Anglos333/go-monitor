@@ -72,6 +72,51 @@ func buildHTTPClient(intervalSec int) *http.Client {
 	}
 }
 
+func drainAndClose(resp *http.Response) {
+	if resp == nil {
+		return
+	}
+	_, _ = io.Copy(io.Discard, resp.Body)
+	_ = resp.Body.Close()
+}
+
+func (s *Service) doProbeRequest(method, rawURL string) (*http.Response, error) {
+	req, err := http.NewRequest(method, rawURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "HakimiMonitor/1.0")
+	return s.client.Do(req)
+}
+
+func shouldFallbackToGET(resp *http.Response, err error) bool {
+	if err != nil {
+		return true
+	}
+	if resp == nil {
+		return true
+	}
+	return resp.StatusCode == http.StatusMethodNotAllowed ||
+		resp.StatusCode == http.StatusNotImplemented ||
+		resp.StatusCode >= 500
+}
+
+func (s *Service) probeWithFallback(rawURL string) (int, error) {
+	headResp, headErr := s.doProbeRequest(http.MethodHead, rawURL)
+	if !shouldFallbackToGET(headResp, headErr) {
+		defer drainAndClose(headResp)
+		return headResp.StatusCode, nil
+	}
+	drainAndClose(headResp)
+
+	getResp, getErr := s.doProbeRequest(http.MethodGet, rawURL)
+	if getErr != nil {
+		return 0, getErr
+	}
+	defer drainAndClose(getResp)
+	return getResp.StatusCode, nil
+}
+
 // Start 启动监控循环，按配置的间隔定时执行检查。收到 ctx.Done() 时退出。
 func (s *Service) Start(ctx context.Context) {
 	for {
@@ -125,6 +170,20 @@ func (s *Service) Results() []model.MonitorResult {
 	return out
 }
 
+// StateSnapshot 返回当前任务运行态副本，供智能分析等只读模块使用。
+func (s *Service) StateSnapshot() map[int]model.TaskState {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make(map[int]model.TaskState, len(s.states))
+	for id, st := range s.states {
+		if st == nil {
+			continue
+		}
+		out[id] = *st
+	}
+	return out
+}
+
 // UpdateStar 在内存结果中同步标星状态，避免前端快速点击时出现跳变。
 // 仅更新已有结果，不影响配置存储。
 func (s *Service) UpdateStar(taskID int, starred bool) {
@@ -133,6 +192,32 @@ func (s *Service) UpdateStar(taskID int, starred bool) {
 	for i := range s.results {
 		if s.results[i].ID == taskID {
 			s.results[i].Starred = starred
+		}
+	}
+}
+
+// SyncUpdatedTask 在任务被编辑后同步刷新内存中的展示结果与状态缓存。
+func (s *Service) SyncUpdatedTask(task model.MonitorTask, oldURL string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if oldURL != "" && oldURL != task.URL {
+		delete(s.history, oldURL)
+		delete(s.states, task.ID)
+	}
+
+	for i := range s.results {
+		if s.results[i].ID == task.ID {
+			s.results[i].TaskName = task.Name
+			s.results[i].URL = task.URL
+			s.results[i].Starred = task.Starred
+			if oldURL != "" && oldURL != task.URL {
+				s.results[i].HistoryDots = nil
+				s.results[i].Status = "待检测"
+				s.results[i].StatusColor = "yellow"
+				s.results[i].Duration = "--"
+				s.results[i].DurationInt = 0
+			}
 		}
 	}
 }
@@ -309,21 +394,11 @@ func (s *Service) checkURL(task model.MonitorTask, ch chan<- model.MonitorResult
 		return
 	}
 
-	req, err := http.NewRequest(http.MethodGet, task.URL, nil)
-	if err != nil {
-		res.Status, res.StatusColor = "故障", "red"
-		res.Duration = "0ms"
-		ch <- res
-		return
-	}
-
-	// 统一设置 UA，便于后端识别与排查
-	req.Header.Set("User-Agent", "HakimiMonitor/1.0")
-
-	resp, err := s.client.Do(req)
+	statusCode, err := s.probeWithFallback(task.URL)
 	ms := time.Since(start).Milliseconds()
 	res.Duration = fmt.Sprintf("%dms", ms)
 	res.DurationInt = ms
+	res.StatusCode = statusCode
 
 	if err != nil {
 		// 网络错误、超时等视为故障
@@ -331,12 +406,8 @@ func (s *Service) checkURL(task model.MonitorTask, ch chan<- model.MonitorResult
 		ch <- res
 		return
 	}
-	defer resp.Body.Close()
-	// 读取并丢弃响应体以复用连接
-	_, _ = io.Copy(io.Discard, resp.Body)
 
-	res.StatusCode = resp.StatusCode
-	if resp.StatusCode >= 200 && resp.StatusCode < 400 {
+	if statusCode >= 200 && statusCode < 400 {
 		res.IsSuccess = true
 		if ms > 800 {
 			// 响应时间超过800ms标记为“缓慢”

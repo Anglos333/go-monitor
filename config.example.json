@@ -10,6 +10,20 @@
     "password": "在此填写你的授权码",
     "to": "receive_email@qq.com"
   },
+  "analysis": {
+    "enabled": true,
+    "cache_seconds": 60,
+    "detail_event_limit": 20,
+    "performance_sample_size": 10,
+    "slow_threshold_ms": 800,
+    "llm": {
+      "enabled": false,
+      "base_url": "https://api.openai.com/v1/chat/completions",
+      "api_key": "",
+      "model": "gpt-4o-mini",
+      "timeout_seconds": 20
+    }
+  },
   "tasks": [
     {
       "id": 1,
